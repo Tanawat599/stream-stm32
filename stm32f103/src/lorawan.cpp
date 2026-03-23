@@ -1,35 +1,36 @@
 #include <RadioLib.h>
 #include <Arduino.h>
 #include "config.h"
+#include "mylib.h"
 
 SX1276 radio = new Module(PB11, PB0, PB12, PB1);
 LoRaWANNode node(&radio, &AS923);
 
 void LoRaWan::begin(){
-    STM32_SERIAL.println(F("\nSetup LoRaWAN Class C..."));
-    STM32_SERIAL.print(F("Initialise radio... "));
+    Serial1.println(F("\nSetup LoRaWAN Class C..."));
+    Serial1.print(F("Initialise radio... "));
 
     int16_t state = radio.begin();
     if (state != RADIOLIB_ERR_NONE) {
-        STM32_SERIAL.println(F("failed!"));
+        Serial1.println(F("failed!"));
         while (true);
     }
-    STM32_SERIAL.println(F("success!"));
+    Serial1.println(F("success!"));
 
-    STM32_SERIAL.print(F("Join Network... "));
+    Serial1.print(F("Join Network... "));
     state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
 
     state = node.activateOTAA();
     if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
-        STM32_SERIAL.print(F("failed, code: ")); STM32_SERIAL.println(state);
+        Serial1.print(F("failed, code: ")); Serial1.println(state);
         while (true);
     }
-    STM32_SERIAL.println(F("Joined!"));
+    Serial1.println(F("Joined!"));
 
     node.setClass(RADIOLIB_LORAWAN_CLASS_C);
 
     const char* payload = "Hello";
-    STM32_SERIAL.println(F("Sending first uplink..."));
+    Serial1.println(F("Sending first uplink..."));
     state = node.sendReceive((uint8_t*)payload, strlen(payload), 1, true);
 }
 

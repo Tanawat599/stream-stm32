@@ -29,32 +29,14 @@
 
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
-#define STM32_SERIAL Serial1
 
 
-/* ===================== LORaWan Configuration ===================== */
-class LoRaWan {
-public:
-    void begin();
-    void classC();
-    void classA();
-};
-
-//Class C
-uint64_t joinEUI = 0xFE018BB657CBC193; 
-uint64_t devEUI  = 0x9246b8a302fea9d3; 
-uint8_t appKey[] = { 0x07, 0xC9, 0xFE, 0x81, 0x6A, 0xD6, 0x69, 0xEB, 0x73, 0xB0, 0x46, 0x0A, 0xCE, 0x4A, 0xD9, 0x9A };
-uint8_t nwkKey[] = { 0x07, 0xC9, 0xFE, 0x81, 0x6A, 0xD6, 0x69, 0xEB, 0x73, 0xB0, 0x46, 0x0A, 0xCE, 0x4A, 0xD9, 0x9A };
-
-//Class A
-
-/* ===================== LORa Configuration ===================== */
-class LoRaP2P {
-public:
-    void begin();
-    void send();
-    void receive();
-};
+/* ===================== LORaWan Keys ===================== */
+// Single extern declarations for LoRaWAN keys (defined in src/config.cpp)
+extern uint64_t joinEUI;
+extern uint64_t devEUI;
+extern uint8_t appKey[];
+extern uint8_t nwkKey[];
 
 
 
