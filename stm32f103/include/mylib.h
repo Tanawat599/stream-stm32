@@ -23,15 +23,11 @@ public:
     void show();
 };
 
-class Commu {
+class I2C {
 public:
-    void begin();
-    void i2c_slave();
-    void i2c_master();
-    void rs485_send();
-    void rs485_receive();
-    void spi_master();
-}
+    void slave_begin();
+    void slave_loop();
+};
 
 
 #endif
