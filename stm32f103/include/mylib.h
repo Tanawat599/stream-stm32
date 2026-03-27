@@ -15,7 +15,23 @@ public:
     void classA();
 };
 
-// Test helper
 void test();
+
+class Display {
+public:
+    void begin();
+    void show();
+};
+
+class Commu {
+public:
+    void begin();
+    void i2c_slave();
+    void i2c_master();
+    void rs485_send();
+    void rs485_receive();
+    void spi_master();
+}
+
 
 #endif
