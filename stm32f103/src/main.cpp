@@ -2,12 +2,13 @@
 #include "mylib.h"
 #include "config.h"
 
-I2C i2c;
+LoRaP2P lora;
 
 void setup() {
-  i2c.slave_begin(0x08);
+  lora.begin(923E6);
 }
 
 void loop() {
-  i2c.slave_loop();
+  lora.send("Hello LoRa!");
+  delay(2000);
 }

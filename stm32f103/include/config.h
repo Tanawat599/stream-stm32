@@ -12,7 +12,7 @@
 
 #include <Arduino.h>
 
-/* ===================== Pin Configuration ===================== */
+/* ===================== Configuration ===================== */
 // ===== LoRa CONFIG =====
 #define LORA_SS_PIN PB11
 #define LORA_RST_PIN PB12

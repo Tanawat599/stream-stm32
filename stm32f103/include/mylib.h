@@ -3,12 +3,29 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#ifndef LORA_P2P_H
+#define LORA_P2P_H
+
+#include <Arduino.h>
+#include <LoRa.h>
+
 class LoRaP2P {
 public:
-    void begin();
-    void send();
-    void receive();
+  void begin(long frequency);
+
+  // Send
+  void send(const char* msg);
+  void sendBytes(uint8_t* data, size_t len);
+
+  // Receive
+  bool available();
+  String receive();
+  int receiveBytes(uint8_t* buffer, size_t len);
+
+private:
 };
+
+#endif
 
 class LoRaWan {
 public:
@@ -19,11 +36,32 @@ public:
 
 void test();
 
+#ifndef DISPLAY_H
+#define DISPLAY_H
+
+#include <Arduino.h>
+#include <Wire.h>
+
 class Display {
 public:
-    void begin();
-    void show();
+  void begin(uint8_t address);
+
+  // ===== Basic =====
+  void clear();
+  void setCursor(uint8_t col, uint8_t row);
+
+  // ===== Print =====
+  void print(const char* msg);
+  void printAt(uint8_t col, uint8_t row, const char* msg);
+
+private:
+  uint8_t _addr;
+
+  void sendCommand(uint8_t cmd);
+  void sendData(const uint8_t* data, size_t len);
 };
+
+#endif
 
 class I2C {
 public:
