@@ -3,7 +3,8 @@
 #include "config.h"
 #include "mylib.h"
 
-SX1276 radio = new Module(PB11, PB0, PB12, PB1);
+
+SX1276 radio = new Module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN);
 LoRaWANNode node(&radio, &AS923);
 
 void LoRaWan::begin(){

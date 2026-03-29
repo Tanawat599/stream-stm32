@@ -13,19 +13,24 @@
 #include <Arduino.h>
 
 /* ===================== Pin Configuration ===================== */
-//LoRa
+// ===== LoRa CONFIG =====
 #define LORA_SS_PIN PB11
 #define LORA_RST_PIN PB12
 #define LORA_DIO0_PIN PB0
 #define LORA_DIO1_PIN PB1
-//LED
+
+// ===== LED CONFIG =====
 #define LED_PIN PA12
-//OLED_Display
+
+// ===== OLED CONFIG =====
 #define OLED_SDA_PIN PB7
 #define OLED_SCL_PIN PB6
-//RS485
-#define RS485_DE_PIN PA3
-#define RS485_RE_PIN PA2
+
+// ===== RS485 CONFIG =====
+#define RS485_SERIAL Serial2
+#define RS485_DE_PIN PB9
+#define RS485_RE_PIN PB8
+#define RS485_BAUD 9600
 
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
