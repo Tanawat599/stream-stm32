@@ -1,14 +1,14 @@
 #include <Arduino.h>
 #include "mylib.h"
-#include "config.h"
 
-LoRaP2P lora;
+LoRaWan lora;   // 👈 สร้าง object
 
 void setup() {
-  lora.begin(923E6);
+  Serial1.begin(115200);
+
+  lora.begin();   // 👈 เรียกใช้
 }
 
 void loop() {
-  lora.send("Hello LoRa!");
-  delay(2000);
+  lora.classC();  // 👈 ฟัง downlink
 }

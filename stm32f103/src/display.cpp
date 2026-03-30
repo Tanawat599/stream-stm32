@@ -1,50 +1,48 @@
-#include <Wire.h>
-#include <Arduino.h>
-#include "mylib.h"
-#include "config.h"
-// ===== Init =====
-void Display::begin(uint8_t address) {
-  _addr = address;
-  Wire.begin();
-  Serial1.println("Display I2C Initialized");
-}
+// #include <Wire.h>
+// #include "mylib.h"
+// #include "config.h"
+// #define SCREEN_WIDTH 64
+// #define SCREEN_HEIGHT 32
 
-// ===== Low level =====
-void Display::sendCommand(uint8_t cmd) {
-  Wire.beginTransmission(_addr);
-  Wire.write(0x00);    
-  Wire.write(cmd);
-  Wire.endTransmission();
-}
+// void Display::begin(uint8_t address) {
+//   Wire.setSCL(PB6);
+//   Wire.setSDA(PB7);
+//   Wire.begin();
 
-void Display::sendData(const uint8_t* data, size_t len) {
-  Wire.beginTransmission(_addr);
-  Wire.write(0x40);     
+//   _display = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-  for (size_t i = 0; i < len; i++) {
-    Wire.write(data[i]);
-  }
+//   if (!_display->begin(SSD1306_SWITCHCAPVCC, address)) {
+//     Serial1.println("SSD1306 init failed");
+//     while (1);
+//   }
 
-  Wire.endTransmission();
-}
+//   _display->clearDisplay();
+//   _display->setTextSize(1);
+//   _display->setTextColor(SSD1306_WHITE);
 
-// ===== Basic Functions =====
-void Display::clear() {
-  sendCommand(0x01);  
-  delay(2);
-}
+//   Serial1.println("SSD1306 Initialized");
+// }
 
-void Display::setCursor(uint8_t col, uint8_t row) {
-  uint8_t addr = col + (row == 0 ? 0x00 : 0x40);
-  sendCommand(0x80 | addr);
-}
+// // ===== Basic =====
+// void Display::clear() {
+//   _display->clearDisplay();
+// }
 
-// ===== Print =====
-void Display::print(const char* msg) {
-  sendData((uint8_t*)msg, strlen(msg));
-}
+// void Display::setCursor(uint8_t x, uint8_t y) {
+//   _display->setCursor(x, y);
+// }
 
-void Display::printAt(uint8_t col, uint8_t row, const char* msg) {
-  setCursor(col, row);
-  print(msg);
-}
+// // ===== Print =====
+// void Display::print(const char* msg) {
+//   _display->print(msg);
+// }
+
+// void Display::printAt(uint8_t x, uint8_t y, const char* msg) {
+//   _display->setCursor(x, y);
+//   _display->print(msg);
+// }
+
+// // ===== Update (สำคัญมาก) =====
+// void Display::update() {
+//   _display->display();  // push buffer ไปจอ
+// }

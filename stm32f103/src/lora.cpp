@@ -1,75 +1,89 @@
-#include <SPI.h>
-#include <LoRa.h>
-#include "config.h"
-#include "mylib.h"
+// #include <Arduino.h>
+// #include "mylib.h"
+// #include "radio.h"
+// #include "config.h"
 
+// // ===== INIT =====
+// void LoRaP2P::begin(float frequency) {
+//   Serial1.begin(115200);
+//   Serial1.println("LoRa P2P Start");
 
-void LoRaP2P::begin(long frequency) {
-  Serial1.begin(115200);
+//   pinMode(LED_PIN, OUTPUT);
+//   digitalWrite(LED_PIN, LOW);
 
-  Serial1.println("LoRa P2P Start");
+//   int state = radio.begin(frequency);
 
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+//   if (state != RADIOLIB_ERR_NONE) {
+//     Serial1.print("LoRa init failed: ");
+//     Serial1.println(state);
+//     while (1);
+//   }
 
-  LoRa.setPins(LORA_SS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
+//   // 🔥 config สำคัญ (ต้องตรงกันทุก node)
+//   radio.setSpreadingFactor(7);
+//   radio.setBandwidth(125.0);
+//   radio.setCodingRate(5);
+//   radio.setOutputPower(17);
 
-  if (!LoRa.begin(frequency)) {
-    Serial1.println("LoRa init failed!");
-    while (1);
-  }
+//   Serial1.println("LoRa ready");
+// }
 
-  Serial1.println("LoRa init success");
-}
+// // ===== SEND STRING =====
+// void LoRaP2P::send(const char* msg) {
+//   int state = radio.transmit(msg);
 
-// ===== Send =====
-void LoRaP2P::send(const char* msg) {
-  LoRa.beginPacket();
-  LoRa.print(msg);
-  LoRa.endPacket();
+//   if (state == RADIOLIB_ERR_NONE) {
+//     Serial1.print("Sent: ");
+//     Serial1.println(msg);
+//   } else {
+//     Serial1.print("Send failed: ");
+//     Serial1.println(state);
+//   }
+// }
 
-  Serial1.print("Sent: ");
-  Serial1.println(msg);
-}
+// // ===== SEND BYTES =====
+// void LoRaP2P::sendBytes(uint8_t* data, size_t len) {
+//   int state = radio.transmit(data, len);
 
-void LoRaP2P::sendBytes(uint8_t* data, size_t len) {
-  LoRa.beginPacket();
-  LoRa.write(data, len);
-  LoRa.endPacket();
+//   if (state == RADIOLIB_ERR_NONE) {
+//     Serial1.println("Sent bytes");
+//   } else {
+//     Serial1.print("Send bytes failed: ");
+//     Serial1.println(state);
+//   }
+// }
 
-  Serial1.println("Sent bytes");
-}
+// // ===== RECEIVE STRING =====
+// String LoRaP2P::receive() {
+//   String msg = "";
 
-// ===== Receive =====
-bool LoRaP2P::available() {
-  return LoRa.parsePacket();
-}
+//   int state = radio.receive(msg, 1000);  // timeout 1 วิ
 
-String LoRaP2P::receive() {
-  String msg = "";
+//   if (state == RADIOLIB_ERR_NONE) {
+//     Serial1.print("Received: ");
+//     Serial1.println(msg);
 
-  while (LoRa.available()) {
-    msg += (char)LoRa.read();
-  }
+//     digitalWrite(LED_PIN, HIGH);
+//     delay(100);
+//     digitalWrite(LED_PIN, LOW);
+//   } 
+//   else if (state != RADIOLIB_ERR_RX_TIMEOUT) {
+//     Serial1.print("Receive error: ");
+//     Serial1.println(state);
+//   }
 
-  if (msg.length()) {
-    Serial1.print("Received: ");
-    Serial1.println(msg);
+//   return msg;
+// }
 
-    digitalWrite(LED_PIN, HIGH);
-    delay(100);
-    digitalWrite(LED_PIN, LOW);
-  }
+// // ===== RECEIVE BYTES =====
+// int LoRaP2P::receiveBytes(uint8_t* buffer, size_t len) {
+//   int state = radio.receive(buffer, len, 1000);
 
-  return msg;
-}
+//   if (state < 0 && state != RADIOLIB_ERR_RX_TIMEOUT) {
+//     Serial1.print("Receive bytes error: ");
+//     Serial1.println(state);
+//     return 0;
+//   }
 
-int LoRaP2P::receiveBytes(uint8_t* buffer, size_t len) {
-  int i = 0;
-
-  while (LoRa.available() && i < len) {
-    buffer[i++] = LoRa.read();
-  }
-
-  return i;
-}
+//   return state;
+// }

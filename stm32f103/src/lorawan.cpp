@@ -4,7 +4,9 @@
 #include "mylib.h"
 
 
-SX1276 radio = new Module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN);
+// SX1276 radio = new Module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN);
+Module module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN);
+SX1276 radio(&module);
 LoRaWANNode node(&radio, &AS923);
 
 void LoRaWan::begin(){
