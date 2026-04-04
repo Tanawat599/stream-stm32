@@ -23,8 +23,9 @@
 class LoRaWan {
 public:
   void begin();
+  void loop();
   void classC();
-  void classA();
+  // void classA();
 };
 
 // ===================== Display =====================
