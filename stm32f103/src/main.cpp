@@ -1,20 +1,20 @@
 #include <Arduino.h>
 #include "mylib.h"
 #include "config.h"
-I2C i2c;
+// I2C i2c;
 
-void setup() {
-  i2c.master_begin();
-}
+// void setup() {
+//   i2c.master_begin();
+// }
 
-void loop() {
-  i2c.master_send(SLAVE_ADDR_1, "Hello Slave!");
-  delay(1000);
+// void loop() {
+//   i2c.master_send(SLAVE_ADDR_1, "Hello Slave!");
+//   delay(1000);
 
-  uint8_t data[] = {0x01, 0x02, 0x03};
-  i2c.master_sendBytes(SLAVE_ADDR_2, data, sizeof(data));
-  delay(1000);
-}
+//   uint8_t data[] = {0x01, 0x02, 0x03};
+//   i2c.master_sendBytes(SLAVE_ADDR_2, data, sizeof(data));
+//   delay(1000);
+// }
 // I2C i2c;
 
 // void setup() {
