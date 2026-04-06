@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <U8g2lib.h>
+
+#pragma once
 
 // #include <LoRa.h>
 // #include <Adafruit_GFX.h>
@@ -20,29 +23,69 @@
 // };
 
 // ===================== LoRa WAN =====================
+
+
+enum LoRaClassMode {
+  CLASS_A,
+  CLASS_C
+};
+
 class LoRaWan {
 public:
   void begin();
   void loop();
+
+  void setMode(LoRaClassMode mode);  
   void classC();
-  // void classA();
+  void classA();                     
+
+private:
+  LoRaClassMode currentMode = CLASS_A;  
 };
 
 // ===================== Display =====================
-class Display {
+// class Display {
+// public:
+//   void begin(uint8_t address);
+
+//   void clear();
+//   void setCursor(uint8_t x, uint8_t y);
+
+//   void print(const char* msg);
+//   void printAt(uint8_t x, uint8_t y, const char* msg);
+
+//   void update();
+
+// private:
+//   class Adafruit_SSD1306* _display; // forward declaration
+// };
+class OLED {
 public:
-  void begin(uint8_t address);
+    // เริ่มต้นจอ
+    void begin();
 
-  void clear();
-  void setCursor(uint8_t x, uint8_t y);
+    // ล้างหน้าจอและอัปเดต
+    void clear();
+    void update();
 
-  void print(const char* msg);
-  void printAt(uint8_t x, uint8_t y, const char* msg);
+    // ---------------- TEXT ----------------
+    void setFont(const uint8_t* font);
+    void print(const char* text, int x, int y);      // ระบุพิกัด
+    void println(const char* text, int x, int y);    // ระบุพิกัด
+    void drawStr(int x, int y, const char* text);
 
-  void update();
+    // ---------------- DRAW ----------------
+    void drawPixel(int x, int y);
+    void drawLine(int x1, int y1, int x2, int y2);
+    void drawBox(int x, int y, int w, int h);
+    void drawFrame(int x, int y, int w, int h);
 
-private:
-  class Adafruit_SSD1306* _display; // forward declaration
+    // ---------------- SETTINGS ----------------
+    void setContrast(uint8_t value);
+    void setFlip(bool flip);
+
+    // ---------------- TEST ----------------
+    void test();
 };
 
 // ===================== I2C =====================

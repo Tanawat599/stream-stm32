@@ -1,19 +1,29 @@
 #include <Arduino.h>
 #include "mylib.h"
 
-LoRaWan lora;   
+OLED oled;
 
 void setup() {
-  Serial1.begin(115200);
+    oled.begin();
+    oled.clear();
+    oled.setFont(u8g2_font_5x7_tr);
 
-  lora.begin();   
+    // แสดงข้อความ
+    oled.print("Hello, World!", 0, 10);
+    oled.println("Line 2", 0, 20);
+
+    // อัปเดต buffer
+    oled.update();
 }
 
 void loop() {
-  lora.classC();  
+    // ตัวอย่างทดสอบ draw frame / line
+    // oled.clear();
+    // oled.drawFrame(0, 0, 128, 64);
+    // oled.drawLine(0, 32, 128, 32);
+    // oled.update();
+    // delay(1000);
 }
-
-
 
 // #include <Arduino.h>
 // #include "lorap2p.h"

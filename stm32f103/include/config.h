@@ -26,6 +26,11 @@
 #define OLED_SDA_PIN PB7
 #define OLED_SCL_PIN PB6
 
+#define OLED_SDA     PB7
+#define OLED_SCL     PB6
+
+#define OLED_ADDR    0x3C
+
 // ===== RS485 CONFIG =====
 #define RS485_SERIAL Serial2
 #define RS485_DE_PIN PB9
