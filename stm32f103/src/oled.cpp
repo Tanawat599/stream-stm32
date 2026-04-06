@@ -4,12 +4,11 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 
-// 🔹 Full buffer I2C (SSD1306 128x64)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
-    U8G2_R0,               // rotation
-    U8X8_PIN_NONE,         // reset pin
-    PB6,                   // SCL (STM32 default)
-    PB7                    // SDA (STM32 default)
+    U8G2_R0,               
+    U8X8_PIN_NONE,         
+    OLED_SCL_PIN,                   
+    OLED_SDA_PIN                    
 );
 
 void OLED::begin() {

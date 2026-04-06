@@ -17,7 +17,6 @@ int16_t LoRaP2P::begin(float frequency) {
     return state;
   }
 
-  // Important: must match on all nodes
   radio.setSpreadingFactor(7);
   radio.setBandwidth(125.0);
   radio.setCodingRate(5);

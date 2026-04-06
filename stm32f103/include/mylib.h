@@ -70,8 +70,8 @@ public:
 
     // ---------------- TEXT ----------------
     void setFont(const uint8_t* font);
-    void print(const char* text, int x, int y);      // ระบุพิกัด
-    void println(const char* text, int x, int y);    // ระบุพิกัด
+    void print(const char* text, int x, int y); 
+    void println(const char* text, int x, int y);   
     void drawStr(int x, int y, const char* text);
 
     // ---------------- DRAW ----------------

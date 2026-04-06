@@ -80,7 +80,6 @@ void LoRaWan::loop() {
             }
 
         } else {
-            // 🔥 Class C → ก็ยังใช้ sendReceive ได้เหมือนกัน!
             int16_t state = node.sendReceive(
                 (uint8_t*)payload,
                 strlen(payload),

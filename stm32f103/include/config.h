@@ -3,7 +3,6 @@
  * =========================================================
  * File: config.h
  * Description: Central configuration for hardware + features
- * Author: YourName
  * =========================================================
  */
 
@@ -36,6 +35,10 @@
 #define RS485_DE_PIN PB9
 #define RS485_RE_PIN PB8
 #define RS485_BAUD 9600
+
+
+#define SLAVE_ADDR_1 0x08
+#define SLAVE_ADDR_2 0x09
 
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
