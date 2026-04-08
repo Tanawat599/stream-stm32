@@ -11,16 +11,16 @@
 // #include <Adafruit_GFX.h>
 // #include <Adafruit_SSD1306.h>
 // ===================== LoRa P2P =====================
-// class LoRaP2P {
-// public:
-//   void begin(float frequency);
+class LoRaP2P {
+public:
+  void begin(float frequency);
 
-//   void send(const char* msg);
-//   void sendBytes(uint8_t* data, size_t len);
+  void send(const char* msg);
+  void sendBytes(uint8_t* data, size_t len);
 
-//   String receive();
-//   int receiveBytes(uint8_t* buffer, size_t len);
-// };
+  String receive();
+  int receiveBytes(uint8_t* buffer, size_t len);
+};
 
 // ===================== LoRa WAN =====================
 
@@ -33,11 +33,11 @@ enum LoRaClassMode {
 class LoRaWan {
 public:
   void begin();
-  void loop();
+  void loop(const char* payload);
 
   void setMode(LoRaClassMode mode);  
   void classC();
-  void classA();                     
+  void classA();
 
 private:
   LoRaClassMode currentMode = CLASS_A;  

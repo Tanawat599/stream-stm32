@@ -3,7 +3,6 @@
 #include "config.h"
 
 LoRaWan lorawan;
-const char* payload = "Hello from loop";
 
 void setup() {
   Serial1.begin(115200);
@@ -14,6 +13,6 @@ void setup() {
 }
 
 void loop(){
-    lorawan.loop(payload);
+    lorawan.loop();
 
 }

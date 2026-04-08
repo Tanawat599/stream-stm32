@@ -55,16 +55,18 @@ void LoRaWan::begin() {
 }
 
 // ===== LOOP =====
-void LoRaWan::loop() {
+void LoRaWan::loop(const char* payload) {
 
-    // ===== SEND ทุก 10 วิ =====
+    // ===== SEND =====
     if (millis() - lastSend > 10000) {
         lastSend = millis();
 
-        const char* payload = "Hello Hybrid";
+        // const char* payload = "Hello Hybrid";
+        Serial1.print(F("Sending: "));
+        Serial1.println(payload);
 
         if (currentMode == CLASS_A) {
-            // 🔥 Class A → ใช้ sendReceive ปกติ
+
             int16_t state = node.sendReceive(
                 (uint8_t*)payload,
                 strlen(payload),

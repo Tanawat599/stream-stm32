@@ -1,0 +1,45 @@
+#include <Arduino.h>
+#include "mylib.h"   
+#include "config.h"  
+
+RS485 rs485(Serial2, RS485_DE_PIN, RS485_RE_PIN);
+
+void setup() {
+
+  Serial1.begin(115200);
+  Serial1.println("RS485 Test Starting...");
+
+
+  rs485.begin(9600);
+}
+void loop() {
+
+  if (rs485.available()) {
+
+    String msg = rs485.receive();
+    Serial1.print("Received: ");
+    Serial1.println(msg);
+
+
+    uint8_t buffer[10];
+    int n = rs485.receiveBytes(buffer, 10);
+    if (n > 0) {
+      Serial1.print("Received bytes: ");
+      for (int i = 0; i < n; i++) {
+        Serial1.print(buffer[i], HEX);
+        Serial1.print(" ");
+      }
+      Serial1.println();
+    }
+  }
+}
+void loop() {
+
+  rs485.send("Hello RS485!");
+
+
+  uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
+  rs485.sendBytes(data, sizeof(data));
+
+  delay(1000); // รอ 1 วินาที
+}
