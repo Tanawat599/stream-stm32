@@ -43,7 +43,7 @@ void LoRaWan::begin() {
 
     state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
     state = node.activateOTAA();
-
+    Serial1.println(joinEUI);
     if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
         Serial1.println(F("Join fail"));
         while (true);
@@ -52,13 +52,14 @@ void LoRaWan::begin() {
     Serial1.println(F("Joined"));
 
     setMode(currentMode);
+    node.setADR(false);
 }
 
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 
     // ===== SEND =====
-    if (millis() - lastSend > 10000) {
+    if (millis() - lastSend > 20000) {
         lastSend = millis();
 
         // const char* payload = "Hello Hybrid";
@@ -103,22 +104,21 @@ void LoRaWan::loop(const char* payload) {
     // ===== CLASS C RECEIVE =====
     if (currentMode == CLASS_C) {
 
-        if (millis() - lastCheck > 1000) {
-            lastCheck = millis();
 
-            uint8_t payload[255];
-            size_t len = 0;
-            LoRaWANEvent_t event;
 
-            int16_t state = node.getDownlinkClassC(payload, &len, &event);
+        uint8_t downlink[255];
+        size_t len = 0;
+        LoRaWANEvent_t event;
 
-            if (state > 0 && len > 0) {
-                Serial1.print(F("[C] Downlink: "));
-                for (size_t i = 0; i < len; i++) {
-                    Serial1.print((char)payload[i]);
-                }
-                Serial1.println();
+        int16_t state = node.getDownlinkClassC(downlink, &len, &event);
+
+        if (state > 0 && len > 0) {
+            Serial1.print(F("[C] Downlink: "));
+            for (size_t i = 0; i < len; i++) {
+                Serial1.print((char)downlink[i]);
             }
+            Serial1.println();
         }
+        
     }
 }

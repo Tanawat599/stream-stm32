@@ -2,17 +2,17 @@
 #include "mylib.h"
 #include "Arduino.h"
 
-RS485::RS485(HardwareSerial& serial, int dePin, int rePin) {
-  _serial = &serial;
-  _dePin = dePin;
-  _rePin = rePin;
+RS485::RS485() {
+  _serial = &RS485_SERIAL;
+  _dePin = RS485_DE_PIN;
+  _rePin = RS485_RE_PIN;
 }
 
 void RS485::begin(long baud) {
   pinMode(_dePin, OUTPUT);
   if (_rePin != -1) pinMode(_rePin, OUTPUT);
 
-  setReceive();               
+  setReceive();
   _serial->begin(baud);
 }
 
