@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <U8g2lib.h>
+#include <SPI.h>
+#include <SD.h>
+#include <ArduinoJson.h>
 
 #pragma once
 
@@ -42,7 +45,37 @@ public:
 private:
   LoRaClassMode currentMode = CLASS_A;  
 };
+class SDResourceManager {
+public:
+    SDResourceManager(uint8_t mosi, uint8_t miso, uint8_t sck, uint8_t cs);
 
+    // 1. ระบบพื้นฐาน
+    bool begin();
+    void listFiles(Stream& serial, const char* dirName = "/", int numTabs = 0);
+
+    // 2. อ่านไฟล์ทั่วไป (แบบ String)
+    String readFile(const char* path);
+
+    // 3. อ่านค่า Config (รองรับแบบรังนก/Nested)
+    bool loadConfig(const char* path);
+    
+    // Getters สำหรับ Config (ตัวอย่าง)
+    String getLoRaKey() { return _loraKey; }
+    int getSensorPin() { return _pin; }
+
+    // 4. ระบบ Logging (.log)
+    bool writeLog(const char* message);
+
+private:
+    uint8_t _mosi, _miso, _sck, _cs;
+    
+    // ตัวแปรเก็บค่า Config
+    String _loraKey;
+    int _pin;
+
+    // Helper สำหรับจัดรูปแบบชื่อไฟล์ 8.3 ถ้าจำเป็น
+    String formatPath(const char* path);
+};
 // ===================== Display =====================
 // class Display {
 // public:
@@ -109,7 +142,7 @@ private:
 // ===================== RS485 =====================
 class RS485 {
 public:
-  RS485(HardwareSerial& serial, int dePin, int rePin = -1);
+  RS485();
 
   void begin(long baud);
 
