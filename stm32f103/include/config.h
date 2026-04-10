@@ -40,6 +40,12 @@
 #define SLAVE_ADDR_1 0x08
 #define SLAVE_ADDR_2 0x09
 
+// ===== RS485 CONFIG =====
+#define SD_MOSI PB15
+#define SD_MISO PB14
+#define SD_SCK  PB13
+#define SD_CS   PA8
+
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
 

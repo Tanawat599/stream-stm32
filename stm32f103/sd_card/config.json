@@ -1,0 +1,108 @@
+{
+  "device": {
+    "name": "STM32F103",
+    "type": "lorawan_node",
+    "id": "stm32f103_node_001"
+  },
+
+  "hardware": {
+    "i2c": {
+      "sda": "PB7",
+      "scl": "PB6",
+      "frequency": 100000
+    },
+
+    "oled": {
+      "enabled": true,
+      "sda": "PB7",
+      "scl": "PB6",
+      "address": "0x3C"
+    },
+
+    "led": {
+      "pin": "PA12",
+      "active_low": false
+    },
+
+    "analog": {
+      "pin": "PA4",
+      "scale": {
+        "min": 4,
+        "max": 20
+      }
+    }
+  },
+
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "sd_log": true
+  },
+
+  "communication": {
+    "serial": {
+      "port": "Serial1",
+      "baud": 115200,
+      "timeout": 1000
+    },
+
+    "rs485": {
+      "port": "Serial2",
+      "de_pin": "PA8",
+      "re_pin": "PA9",
+      "baud": 9600,
+      "timeout": 1000,
+      "frame": {
+        "data_bits": 8,
+        "stop_bits": 1,
+        "parity": "none"
+      },
+      "slaves": ["0x08", "0x09"]
+    }
+  },
+
+  "lora": {
+    "pins": {
+      "ss": "PB11",
+      "rst": "PB12",
+      "dio0": "PB0",
+      "dio1": "PB1"
+    },
+
+    "region": "AS923",
+
+    "lorawan": {
+      "mode": "OTAA",
+
+      "otaa": {
+        "join_eui": "FC644250F0DB9BE9",
+        "dev_eui": "9F75EDA1CF67BF63",
+        "nwk_key": "B229498BBFC7D8E6D2DB8104D38A4D24",
+        "app_key": "B229498BBFC7D8E6D2DB8104D38A4D24"
+      },
+
+      "abp": {
+        "dev_addr": "26011BDA",
+        "nwk_skey": "2B7E151628AED2A6ABF7158809CF4F3C",
+        "app_skey": "2B7E151628AED2A6ABF7158809CF4F3C"
+      },
+
+      "class": "C",
+
+      "rx2": {
+        "frequency": 869525000,
+        "data_rate": "DR0"
+      },
+
+      "tx": {
+        "sf": 7,
+        "power": 14,
+        "adr": true
+      },
+
+      "confirmed_uplink": false,
+      "fport": 2,
+      "duty_cycle": true
+    }
+  }
+}

@@ -10,7 +10,6 @@ bool SDResourceManager::begin() {
     return SD.begin(_cs);
 }
 
-// 1. ดูไฟล์ทั้งหมดใน SD Card
 void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTabs) {
     File dir = SD.open(dirName);
     if (!dir) return;
@@ -30,7 +29,6 @@ void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTa
     dir.close();
 }
 
-// 2. อ่านค่าไฟล์ใดๆ ตามชื่อที่ระบุ
 String SDResourceManager::readFile(const char* path) {
     File file = SD.open(path);
     if (!file) return "ERROR_OPEN";
@@ -40,7 +38,6 @@ String SDResourceManager::readFile(const char* path) {
     return content;
 }
 
-// 3. อ่าน Config และรองรับ Data แบบรังนก (Nested JSON)
 bool SDResourceManager::loadConfig(const char* path) {
     File file = SD.open(path);
     if (!file) return false;
@@ -56,16 +53,14 @@ bool SDResourceManager::loadConfig(const char* path) {
     if (doc["lora"]["keys"].containsKey("app_key")) {
         _loraKey = doc["lora"]["keys"]["app_key"].as<String>();
     } else {
-        _loraKey = "KEY_NOT_FOUND"; // เพื่อให้รู้ว่าหาไม่เจอจริงๆ ไม่ใช่เปิดไฟล์ไม่ได้
+        _loraKey = "KEY_NOT_FOUND"; 
     }
 
     file.close();
     return true;
 }
 
-// 4. บันทึก Log (.log)
 bool SDResourceManager::writeLog(const char* message) {
-    // ใช้ชื่อไฟล์ตายตัวหรือเปลี่ยนตามวันก็ได้
     File logFile = SD.open("/system.log", FILE_WRITE);
     if (logFile) {
         logFile.printf("[%lu] %s\n", millis(), message);
@@ -73,4 +68,61 @@ bool SDResourceManager::writeLog(const char* message) {
         return true;
     }
     return false;
+}
+
+Logger::Logger(SDResourceManager* sd) {
+    _sd = sd;
+}
+
+// ===== Key-Value Log =====
+void Logger::logKV(const char* type, int count, ...) {
+    char buffer[256];
+    int offset = 0;
+
+    offset += sprintf(buffer + offset, "[%lu] [%s] ", millis(), type);
+
+    va_list args;
+    va_start(args, count);
+
+    for (int i = 0; i < count; i++) {
+        const char* key = va_arg(args, const char*);
+        float value = va_arg(args, double); // float → double
+        const char* unit = va_arg(args, const char*);
+
+        offset += sprintf(buffer + offset, "%s=%.2f%s ", key, value, unit);
+    }
+
+    va_end(args);
+
+    _sd->writeLog(buffer);
+}
+
+// ===== Message Log =====
+void Logger::logMsg(const char* type, const char* message) {
+    char buffer[256];
+    sprintf(buffer, "[%lu] [%s] %s", millis(), type, message);
+    _sd->writeLog(buffer);
+}
+
+// ===== Mixed Log =====
+void Logger::logMixed(const char* type, const char* message, int count, ...) {
+    char buffer[256];
+    int offset = 0;
+
+    offset += sprintf(buffer + offset, "[%lu] [%s] %s ", millis(), type, message);
+
+    va_list args;
+    va_start(args, count);
+
+    for (int i = 0; i < count; i++) {
+        const char* key = va_arg(args, const char*);
+        float value = va_arg(args, double);
+        const char* unit = va_arg(args, const char*);
+
+        offset += sprintf(buffer + offset, "%s=%.2f%s ", key, value, unit);
+    }
+
+    va_end(args);
+
+    _sd->writeLog(buffer);
 }

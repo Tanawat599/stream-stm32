@@ -1,0 +1,37 @@
+#include <Arduino.h>
+#include "mylib.h"
+
+#define SD_MOSI PB15
+#define SD_MISO PB14
+#define SD_SCK  PB13
+#define SD_CS   PA8
+#define DEBUG_SERIAL Serial1
+
+SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
+
+void setup() {
+    DEBUG_SERIAL.begin(115200);
+    delay(2000);
+
+    if (sd.begin()) {
+if (sd.loadConfig("/CONFIG~1.JSO")) {
+            DEBUG_SERIAL.print("LoRa Key: "); 
+            DEBUG_SERIAL.println(sd.getLoRaKey());
+        } else {
+            DEBUG_SERIAL.println("❌ Load Config Failed");
+        }
+
+        // อ่านไฟล์ Log ที่เพิ่งสร้าง
+        DEBUG_SERIAL.println("--- Reading Log Content ---");
+        DEBUG_SERIAL.println(sd.readFile("/SYSTEM.LOG"));
+    }
+}
+
+void loop() {
+    // ตัวอย่างการเก็บ Log ทุกๆ 1 นาที
+    static unsigned long lastLog = 0;
+    if (millis() - lastLog > 60000) {
+        sd.writeLog("Heartbeat: System is running...");
+        lastLog = millis();
+    }
+}

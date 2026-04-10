@@ -49,32 +49,33 @@ class SDResourceManager {
 public:
     SDResourceManager(uint8_t mosi, uint8_t miso, uint8_t sck, uint8_t cs);
 
-    // 1. ระบบพื้นฐาน
     bool begin();
     void listFiles(Stream& serial, const char* dirName = "/", int numTabs = 0);
 
-    // 2. อ่านไฟล์ทั่วไป (แบบ String)
     String readFile(const char* path);
-
-    // 3. อ่านค่า Config (รองรับแบบรังนก/Nested)
     bool loadConfig(const char* path);
-    
-    // Getters สำหรับ Config (ตัวอย่าง)
+
     String getLoRaKey() { return _loraKey; }
     int getSensorPin() { return _pin; }
 
-    // 4. ระบบ Logging (.log)
     bool writeLog(const char* message);
 
 private:
     uint8_t _mosi, _miso, _sck, _cs;
-    
-    // ตัวแปรเก็บค่า Config
+
     String _loraKey;
     int _pin;
+};
+class Logger {
+private:
+    SDResourceManager* _sd;
 
-    // Helper สำหรับจัดรูปแบบชื่อไฟล์ 8.3 ถ้าจำเป็น
-    String formatPath(const char* path);
+public:
+    Logger(SDResourceManager* sd);
+
+    void logKV(const char* type, int count, ...);
+    void logMsg(const char* type, const char* message);
+    void logMixed(const char* type, const char* message, int count, ...);
 };
 // ===================== Display =====================
 // class Display {
