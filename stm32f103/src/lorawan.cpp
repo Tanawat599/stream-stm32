@@ -81,6 +81,11 @@ void LoRaWan::begin() {
 
     Serial1.println(F("\nLoRaWAN Hybrid"));
 
+    SPI.setSCLK(PA5);
+    SPI.setMISO(PA6);
+    SPI.setMOSI(PA7);
+    SPI.begin();
+
     int16_t state = radio.begin();
     if (state != RADIOLIB_ERR_NONE) {
         Serial1.println(F("Radio fail"));
@@ -110,7 +115,6 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
         return;
     }
 
-    // parse into a document (keep small to avoid large stack usage)
     StaticJsonDocument<1024> doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
@@ -147,6 +151,71 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
         parseHexToBytes(s, appKey, 16);
         Serial1.println(F("LoRa: appKey set"));
     }
+
+    if (lorawan.containsKey("class")) {
+        const char* s = lorawan["class"];
+        if (strcmp(s, "A") == 0) {
+            setMode(CLASS_A);
+        } else if (strcmp(s, "C") == 0) {
+            setMode(CLASS_C);
+        }
+    }
+
+    if (lorawan.containsKey("tx")) {
+        JsonObject tx = lorawan["tx"].as<JsonObject>();
+        if (tx.containsKey("adr")) {
+            bool adr = tx["adr"];
+            node.setADR(adr);
+            Serial1.print(F("LoRa: ADR set: ")); Serial1.println(adr ? "ON" : "OFF");
+        }
+        if (tx.containsKey("sf")) {
+            int sf = tx["sf"];
+            uint8_t dr = 12 - sf; 
+            node.setDatarate(dr);
+            Serial1.print(F("LoRa: SF set: ")); Serial1.println(sf);
+        }
+        if (tx.containsKey("power")) {
+            int power = tx["power"];
+            node.setTxPower(power);
+            Serial1.print(F("LoRa: Tx Power set: ")); Serial1.println(power);
+
+        }
+    }
+
+    if (lorawan.containsKey("rx2")) {
+        JsonObject rx2 = lorawan["rx2"].as<JsonObject>();
+        if (rx2.containsKey("frequency")) {
+            float freq = rx2["frequency"];
+            //node.setRx2Frequency(freq);
+            Serial1.print(F("LoRa: RX2 Freq set: ")); Serial1.println(freq);
+        }
+        if (rx2.containsKey("data_rate")) {
+            int sf = rx2["data_rate"];
+            //node.setRx2SpreadingFactor(sf);
+            Serial1.print(F("LoRa: RX2 SF set: ")); Serial1.println(sf);
+        }
+    }
+
+    if (lorawan.containsKey("confirmed_uplink")){
+        bool confirmed = lorawan["confirmed_uplink"];
+        //node.setConfirmedUplink(confirmed);
+        Serial1.print(F("LoRa: Confirmed Uplink set: ")); Serial1.println(confirmed ? "ON" : "OFF");
+    }
+
+    if (lorawan.containsKey("fport")) {
+        int fport = lorawan["fport"];
+        //node.setFPort(fport);
+        Serial1.print(F("LoRa: FPort set: ")); Serial1.println(fport);
+
+    }
+
+    if (lorawan.containsKey("duty_cycle")) {
+        bool duty = lorawan["duty_cycle"];
+        node.setDutyCycle(duty);
+        Serial1.print(F("LoRa: Duty Cycle set: ")); Serial1.println(duty ? "ON" : "OFF");
+    }
+
+
 }
 
 // ===== LOOP =====
@@ -172,7 +241,7 @@ void LoRaWan::loop(const char* payload) {
             if (state == RADIOLIB_ERR_NONE) {
                 Serial1.println(F("[A] Uplink OK"));
             } else {
-                Serial1.print(F("[A] Error: "));
+                Serial1.print(F("[A] State: "));
                 Serial1.println(state);
             }
 
@@ -187,7 +256,7 @@ void LoRaWan::loop(const char* payload) {
             if (state == RADIOLIB_ERR_NONE) {
                 Serial1.println(F("[C] Uplink OK"));
             } else {
-                Serial1.print(F("[C] Error: "));
+                Serial1.print(F("[C] State: "));
                 Serial1.println(state);
             }
         }
@@ -215,4 +284,9 @@ void LoRaWan::loop(const char* payload) {
         }
         
     }
+}
+void LoRaWan::end() {
+    SPI.end();                            
+    digitalWrite(LORA_SS_PIN, HIGH);       
+    Serial1.println(F("LoRa SPI Closed"));
 }

@@ -10,9 +10,7 @@
 
 #pragma once
 
-// #include <LoRa.h>
-// #include <Adafruit_GFX.h>
-// #include <Adafruit_SSD1306.h>
+
 // ===================== LoRa P2P =====================
 class LoRaP2P {
 public:
@@ -41,6 +39,7 @@ public:
   void setMode(LoRaClassMode mode);  
   void classC();
   void classA();
+  void end();
 
 private:
   LoRaClassMode currentMode = CLASS_C; 
@@ -59,6 +58,7 @@ public:
     int getSensorPin() { return _pin; }
 
     bool writeLog(const char* message);
+    void end();
 
 private:
     uint8_t _mosi, _miso, _sck, _cs;
@@ -95,12 +95,11 @@ public:
 // };
 class OLED {
 public:
-    // เริ่มต้นจอ
     void begin();
 
-    // ล้างหน้าจอและอัปเดต
     void clear();
     void update();
+    void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
 
     // ---------------- TEXT ----------------
     void setFont(const uint8_t* font);
@@ -125,6 +124,8 @@ public:
 // ===================== I2C =====================
 class I2C {
 public:
+  
+  void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
   void slave_begin(uint8_t address);
   void slave_loop();
 
@@ -144,6 +145,7 @@ private:
 class RS485 {
 public:
   RS485();
+  void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
 
   void begin(long baud);
 

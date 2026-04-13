@@ -1,108 +1,65 @@
+
 // #include <Arduino.h>
 // #include "mylib.h"
 // #include "config.h"
 
 // SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
 // Logger logger(&sd);
+// LoRaWan lorawan;
 
 // void setup() {
-//     sd.begin();
+//     Serial1.begin(SERIAL_BAUD);
+//     delay(1000); 
 
-//     logger.logMsg("JOIN", "Success");
+//     pinMode(SD_CS, OUTPUT);       digitalWrite(SD_CS, HIGH);
+//     pinMode(LORA_SS_PIN, OUTPUT); digitalWrite(LORA_SS_PIN, HIGH);
 
-//     logger.logKV("SENSOR", 2,
-//         "TEMP", 28.5, "C",
-//         "HUM", 70.0, "%"
-//     );
+//     Serial1.println("\n--- System Booting ---");
+
+//     // ==========================================
+//     // Phase 1: SD Card
+//     // ==========================================
+//     if (sd.begin()) {
+//         logger.logMsg("SYSTEM", "SD initialized");
+//         lorawan.loadConfig(sd, "/CONFIG~1.JSO");
+//         sd.end();
+//     } else {
+//         Serial1.println("SD init failed!");
+//     }
+
+//     // ==========================================
+//     // Phase 2: LoRaWAN
+//     // ==========================================
+//     lorawan.begin();
+//     lorawan.setMode(CLASS_C);
+//     logger.logMsg("SYSTEM", "LoRa initialized");
 // }
-// void loop() {
-//     logger.logMixed("SENSOR", "Reading", 2,
-//         "TEMP", 28.5, "C",
-//         "HUM", 70.0, "%"
-//     );
 
+// void loop() {
+//     // โค้ดลูปทำงานได้ตามปกติ
+//     lorawan.loop("Hello");
 //     delay(5000);
 // }
-
 #include <Arduino.h>
-#include "mylib.h"
-#include "config.h"
-#include <SPI.h>
-
-// Objects
-SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
-Logger logger(&sd);
-LoRaWan lorawan;
-
 void setup() {
-    Serial1.begin(SERIAL_BAUD);
-    delay(1000); // รอให้ Serial พร้อมทำงานก่อน ไม่งั้นอาจจะมองไม่เห็นข้อความแรก
+    Serial1.begin(115200);
+    delay(2000);
 
-    Serial1.println("\n\n--- System Booting ---");
+    Serial1.println("--- STM32 Unique ID (Direct Memory) ---");
 
-    // 1. สั่งปิดอุปกรณ์ทั้งคู่ก่อน
-    pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
-    pinMode(LORA_SS_PIN, OUTPUT); digitalWrite(LORA_SS_PIN, HIGH);
+    // ตำแหน่ง Address ของ UID สำหรับตระกูล STM32F1xx
+    uint32_t *uidAddress = (uint32_t *)0x1FFFF7E8;
 
-    Serial1.println("--- Reading SD Card Config ---");
+    // อ่านข้อมูล 3 ชุด (ชุดละ 32-bit)
+    uint32_t word0 = uidAddress[0];
+    uint32_t word1 = uidAddress[1];
+    uint32_t word2 = uidAddress[2];
 
-    // 2. ตั้งขาไปที่ SD Card (PB13-15) แล้วค่อย begin (ลบ SPI.end ทิ้งไปแล้ว)
-    SPI.setSCLK(SD_SCK);
-    SPI.setMISO(SD_MISO);
-    SPI.setMOSI(SD_MOSI);
-    SPI.begin(); 
-
-    // อ่าน SD Card
-    if (sd.begin()) {
-        logger.logMsg("SYSTEM", "SD initialized");
-        lorawan.loadConfig(sd, "/CONFIG~1.JSO");
-        Serial1.println("SD Config Loaded.");
-    } else {
-        Serial1.println("SD init failed!");
-    }
-
-    Serial1.println("--- Starting LoRaWAN ---");
-    
-    // 3. ปิดบัสเดิม และเตรียมตัวย้ายสาย
-    SPI.end(); 
-    digitalWrite(SD_CS, HIGH); // สั่ง SD Card ให้เงียบ
-    delay(100);
-
-    // 4. ย้าย SPI กลับมาหา LoRa (ขา PA5-PA7)
-    SPI.setSCLK(PA5);
-    SPI.setMISO(PA6);
-    SPI.setMOSI(PA7);
-    SPI.begin(); 
-    
-    // เริ่มต้น LoRa
-    lorawan.begin();
-    lorawan.setMode(CLASS_C);
-
-    logger.logMsg("SYSTEM", "LoRa initialized");
+    Serial1.print("Device UID: ");
+    Serial1.print(word0, HEX);
+    Serial1.print(word1, HEX);
+    Serial1.println(word2, HEX);
 }
+
 void loop() {
-    // example payload send handled by LoRaWan::loop elsewhere
-    lorawan.loop("Hello");
-    delay(5000);
 }
-
-
-// #include <Arduino.h>
-// #include "mylib.h"
-// #include "config.h"
-
-// LoRaWan lorawan;
-// const char* payload = "Hello from loop";
-
-// void setup() {
-//   Serial1.begin(115200);
-//   Serial1.println("LoraWAN Starting...");
-//   lorawan.begin();
-//   lorawan.setMode(CLASS_C);
-
-// }
-
-// void loop(){
-//     lorawan.loop(payload);
-
-// }

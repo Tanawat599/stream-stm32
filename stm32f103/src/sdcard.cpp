@@ -1,13 +1,19 @@
 #include "mylib.h"
-
+#include "config.h"
 SDResourceManager::SDResourceManager(uint8_t mosi, uint8_t miso, uint8_t sck, uint8_t cs) 
     : _mosi(mosi), _miso(miso), _sck(sck), _cs(cs) {}
 
 bool SDResourceManager::begin() {
-    SPI.setMOSI(_mosi);
-    SPI.setMISO(_miso);
-    SPI.setSCLK(_sck);
-    return SD.begin(_cs);
+    SPI.setSCLK(SD_SCK);
+    SPI.setMISO(SD_MISO);
+    SPI.setMOSI(SD_MOSI);
+    SPI.begin();
+
+    
+    if (!SD.begin(SD_CS)) {  
+        return false;
+    }
+    return true;
 }
 
 void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTabs) {
@@ -125,4 +131,11 @@ void Logger::logMixed(const char* type, const char* message, int count, ...) {
     va_end(args);
 
     _sd->writeLog(buffer);
+}
+
+void SDResourceManager::end() {
+    SPI.end();                       
+    digitalWrite(SD_CS, HIGH);       
+    delay(50);                       
+    Serial1.println(F("SD SPI Closed"));
 }
