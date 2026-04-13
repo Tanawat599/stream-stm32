@@ -5,12 +5,59 @@
 // ===== MODE =====
 
 
-LoRaClassMode currentMode = CLASS_A;
+LoRaClassMode currentMode = CLASS_C;
 
 // ===== LORA =====
 Module module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN);
 SX1276 radio(&module);
 LoRaWANNode node(&radio, &AS923);
+
+// ===== Runtime-configurable LoRaWAN keys (defaults kept here)
+uint64_t joinEUI = 0xFC644250F0DB9BE9;
+uint64_t devEUI  = 0x9F75EDA1CF67BF63;
+uint8_t appKey[16] = { 0xB2, 0x29, 0x49, 0x8B, 0xBF, 0xC7, 0xD8, 0xE6, 0xD2, 0xDB, 0x81, 0x04, 0xD3, 0x8A, 0x4D, 0x24};
+uint8_t nwkKey[16] = { 0xB2, 0x29, 0x49, 0x8B, 0xBF, 0xC7, 0xD8, 0xE6, 0xD2, 0xDB, 0x81, 0x04, 0xD3, 0x8A, 0x4D, 0x24 };
+
+// ===== Helpers: parse hex strings from JSON =====
+static uint8_t hexCharToNibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    return 0;
+}
+
+static void parseHexToBytes(const char* hex, uint8_t* out, size_t outLen) {
+    // hex expected length = outLen*2
+    for (size_t i = 0; i < outLen; i++) {
+        uint8_t hi = hexCharToNibble(hex[i*2]);
+        uint8_t lo = hexCharToNibble(hex[i*2 + 1]);
+        out[i] = (hi << 4) | lo;
+    }
+}
+
+static uint64_t parseHexToUint64(const char* hex) {
+    // Expect up to 16 hex chars (8 bytes)
+    uint64_t v = 0;
+    size_t len = strlen(hex);
+    // If shorter, parse as available
+    for (size_t i = 0; i < len; i++) {
+        char c = hex[i];
+        uint8_t nib = hexCharToNibble(c);
+        v = (v << 4) | nib;
+    }
+    return v;
+}
+
+// Print 64-bit value as 16 hex chars without relying on Print::println(uint64_t)
+static void printUint64Hex(uint64_t v) {
+    char buf[17];
+    for (int i = 0; i < 8; i++) {
+        uint8_t byte = (v >> ((7 - i) * 8)) & 0xFF;
+        sprintf(buf + i*2, "%02X", byte);
+    }
+    buf[16] = '\0';
+    Serial1.println(buf);
+}
 
 unsigned long lastSend = 0;
 unsigned long lastCheck = 0;
@@ -30,14 +77,14 @@ void LoRaWan::setMode(LoRaClassMode mode) {
 
 // ===== SETUP =====
 void LoRaWan::begin() {
-    Serial1.begin(115200);
-    delay(2000);
+
 
     Serial1.println(F("\nLoRaWAN Hybrid"));
 
     int16_t state = radio.begin();
     if (state != RADIOLIB_ERR_NONE) {
         Serial1.println(F("Radio fail"));
+        Serial1.println(state);
         while (true);
     }
 
@@ -53,6 +100,53 @@ void LoRaWan::begin() {
 
     setMode(currentMode);
     node.setADR(false);
+}
+
+void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
+    String json = sd.readFile(path);
+    if (json == "ERROR_OPEN") {
+        Serial1.print(F("LoRa: failed to open config " ));
+        Serial1.println(path);
+        return;
+    }
+
+    // parse into a document (keep small to avoid large stack usage)
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Serial1.println(F("LoRa: JSON parse failed"));
+        return;
+    }
+
+    JsonObject lora = doc["lora"].as<JsonObject>();
+    if (!lora.containsKey("lorawan")) return;
+    JsonObject lorawan = lora["lorawan"].as<JsonObject>();
+    if (!lorawan.containsKey("otaa")) return;
+    JsonObject otaa = lorawan["otaa"].as<JsonObject>();
+
+    if (otaa.containsKey("join_eui")) {
+        const char* s = otaa["join_eui"];
+        joinEUI = parseHexToUint64(s);
+        Serial1.print(F("LoRa: joinEUI set: 0x")); printUint64Hex(joinEUI);
+    }
+
+    if (otaa.containsKey("dev_eui")) {
+        const char* s = otaa["dev_eui"];
+        devEUI = parseHexToUint64(s);
+        Serial1.print(F("LoRa: devEUI set: 0x")); printUint64Hex(devEUI);
+    }
+
+    if (otaa.containsKey("nwk_key")) {
+        const char* s = otaa["nwk_key"];
+        parseHexToBytes(s, nwkKey, 16);
+        Serial1.println(F("LoRa: nwkKey set"));
+    }
+
+    if (otaa.containsKey("app_key")) {
+        const char* s = otaa["app_key"];
+        parseHexToBytes(s, appKey, 16);
+        Serial1.println(F("LoRa: appKey set"));
+    }
 }
 
 // ===== LOOP =====

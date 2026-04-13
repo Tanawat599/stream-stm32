@@ -1,0 +1,150 @@
+#include <Arduino.h>
+#include "mylib.h"
+#include <ArduinoJson.h>
+#include "config.h"
+// ===== Object =====
+SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS); // ปรับตามบอร์ด
+Logger logger(&sd);
+
+JsonDocument config;
+
+// ===== Helper =====
+String readConfig() {
+    String content = sd.readFile("/CONFIG~1.JSO");
+    if (content == "ERROR_OPEN") {
+        Serial1.println("Failed to open config");
+    }
+    return content;
+}
+
+// ===== Setup =====
+void setup() {
+    Serial1.begin(115200);
+
+    // ===== SD Init =====
+    if (!sd.begin()) {
+        Serial1.println("SD init failed!");
+        return;
+    }
+
+    logger.logMsg("SYSTEM", "SD Initialized");
+
+    // ===== Load Config =====
+    String jsonStr = readConfig();
+
+    DeserializationError err = deserializeJson(config, jsonStr);
+    if (err) {
+        Serial1.println("JSON parse failed!");
+        logger.logMsg("ERROR", "JSON parse failed");
+        return;
+    }
+
+    logger.logMsg("SYSTEM", "Config Loaded");
+
+    // =====================================================
+    // 🔹 DEVICE
+    // =====================================================
+    const char* devName = config["device"]["name"];
+    const char* devId   = config["device"]["id"];
+
+    Serial1.printf("Device: %s (%s)\n", devName, devId);
+
+    // =====================================================
+    // 🔹 I2C
+    // =====================================================
+    const char* sda = config["hardware"]["i2c"]["sda"];
+    const char* scl = config["hardware"]["i2c"]["scl"];
+    int freq        = config["hardware"]["i2c"]["frequency"];
+
+    Serial1.printf("I2C SDA=%s SCL=%s Freq=%d\n", sda, scl, freq);
+
+    // (ต้อง map string → pin จริงเอง เช่น PB7 → GPIOB,7)
+
+    // =====================================================
+    // 🔹 OLED
+    // =====================================================
+    bool oledEnable = config["hardware"]["oled"]["enabled"];
+    const char* oledAddr = config["hardware"]["oled"]["address"];
+
+    if (oledEnable) {
+        Serial1.printf("OLED Enabled Addr=%s\n", oledAddr);
+    }
+
+    // =====================================================
+    // 🔹 LED
+    // =====================================================
+    const char* ledPin = config["hardware"]["led"]["pin"];
+    bool activeLow = config["hardware"]["led"]["active_low"];
+
+    Serial1.printf("LED Pin=%s ActiveLow=%d\n", ledPin, activeLow);
+
+    // =====================================================
+    // 🔹 ANALOG
+    // =====================================================
+    const char* analogPin = config["hardware"]["analog"]["pin"];
+    int minVal = config["hardware"]["analog"]["scale"]["min"];
+    int maxVal = config["hardware"]["analog"]["scale"]["max"];
+
+    Serial1.printf("Analog Pin=%s (%d-%d)\n", analogPin, minVal, maxVal);
+
+    // =====================================================
+    // 🔹 Serial1
+    // =====================================================
+    const char* serialPort = config["communication"]["serial"]["port"];
+    int baud = config["communication"]["serial"]["baud"];
+
+    Serial1.printf("Serial Port=%s Baud=%d\n", serialPort, baud);
+
+    // =====================================================
+    // 🔹 RS485
+    // =====================================================
+    int rs485Baud = config["communication"]["rs485"]["baud"];
+    const char* dePin = config["communication"]["rs485"]["de_pin"];
+    const char* rePin = config["communication"]["rs485"]["re_pin"];
+
+    Serial1.printf("RS485 Baud=%d DE=%s RE=%s\n", rs485Baud, dePin, rePin);
+
+    JsonArray slaves = config["communication"]["rs485"]["slaves"];
+    for (auto s : slaves) {
+        Serial1.printf("Slave: %s\n", s.as<const char*>());
+    }
+
+    // =====================================================
+    // 🔹 LORA
+    // =====================================================
+    const char* region = config["lora"]["region"];
+    const char* mode   = config["lora"]["lorawan"]["mode"];
+
+    Serial1.printf("LoRa Region=%s Mode=%s\n", region, mode);
+
+    if (strcmp(mode, "OTAA") == 0) {
+        const char* devEui = config["lora"]["lorawan"]["otaa"]["dev_eui"];
+        const char* appKey = config["lora"]["lorawan"]["otaa"]["app_key"];
+
+        Serial1.printf("OTAA DevEUI=%s\n", devEui);
+    }
+
+    // =====================================================
+    // 🔹 LOGGING
+    // =====================================================
+    bool logEnable = config["logging"]["enabled"];
+    const char* level = config["logging"]["level"];
+
+    Serial1.printf("Logging: %d Level=%s\n", logEnable, level);
+
+    logger.logMsg("SYSTEM", "Setup Complete");
+}
+
+// ===== Loop =====
+void loop() {
+    // ตัวอย่าง log sensor
+    float temp = 25.5;
+    float current = 12.3;
+
+    logger.logKV("SENSOR", 2,
+        "temp", temp, "C",
+        "current", current, "mA"
+    );
+
+    delay(5000);
+}

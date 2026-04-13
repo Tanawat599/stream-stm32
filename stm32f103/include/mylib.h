@@ -37,13 +37,13 @@ class LoRaWan {
 public:
   void begin();
   void loop(const char* payload);
-
+  void loadConfig(class SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
   void setMode(LoRaClassMode mode);  
   void classC();
   void classA();
 
 private:
-  LoRaClassMode currentMode = CLASS_A;  
+  LoRaClassMode currentMode = CLASS_C; 
 };
 class SDResourceManager {
 public:
