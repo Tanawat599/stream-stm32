@@ -2,14 +2,16 @@
   "device": {
     "name": "STM32F103",
     "type": "lorawan_node",
-    "id": "stm32f103_node_001"
+    "id": "stm32f103_node_001",
+    "uid": "66EFF303436474257135038"
   },
 
   "hardware": {
     "i2c": {
       "sda": "PB7",
       "scl": "PB6",
-      "frequency": 100000
+      "frequency": 100000,
+      "master_address": "0x08"
     },
 
     "oled": {
@@ -30,6 +32,38 @@
         "min": 4,
         "max": 20
       }
+    },
+    "modbus_rs485": {
+      "enable": true,
+      "baud_rate": 9600,
+      "stop_bit": 1,
+      "data_bit": 8,
+      "parity": "NONE",
+      "interval_ms": 2000,
+      "max_resp_ms": 1000,
+      "max_retry": 3,
+      "channels": [
+        {
+          "id": 1,
+          "name": "temperature",
+          "slave_id": 1,
+          "address": 0,
+          "quantity": 1,
+          "type": "HOLDING",
+          "byte_order": "AB",
+          "sign": false
+        },
+        {
+          "id": 2,
+          "name": "humidity",
+          "slave_id": 1,
+          "address": 1,
+          "quantity": 2,
+          "type": "INPUT",
+          "byte_order": "ABCD",
+          "sign": false
+        }
+      ]
     }
   },
 

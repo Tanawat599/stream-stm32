@@ -95,37 +95,44 @@
 // }
 #include <Arduino.h>
 #include "mylib.h"
-#include "config.h"
+#include "config.h" // เปิดคอมเมนต์ถ้าคุณมีไฟล์นี้
+// #include "SDResourceManager.h" // เปิดคอมเมนต์ถ้าคุณเปิดใช้คลาส SD Card
 
+// กำหนดพิน RS485 สำหรับ USART2 แบบแยกขา
 #define RS485_DE_PIN PB9
 #define RS485_RE_PIN PB8
 
+// สร้างออบเจกต์ MASTER โดยผูกกับ Serial2
 MODBUS_RS485 MASTER(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
+
+// --- เปิดคอมเมนต์บรรทัดล่างนี้ ถ้าใช้งาน SD Card ---
 SDResourceManager mySD(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
 
 void setup() {
+    // ใช้ Serial1 ในการ Print แสดงผลออกหน้าจอคอมพิวเตอร์
     Serial1.begin(115200);
     delay(2000);
     Serial1.println("Starting Modbus Master on USART2 (DE/RE split)...");
 
-    bool isConfigLoaded = false;
-
+    // =========================================================
+    // ส่วนโหลด Config: ถ้าใช้ SD Card ให้ลบสัญลักษณ์ /* และ */ ออก
+    // =========================================================
+    
     if (mySD.begin()) {
         Serial1.println("SD Card Initialized.");
         Serial1.println("=== Files in SD Card ===");
-        mySD.listFiles(Serial1, "/", 0);
+        mySD.listFiles(Serial1, "/", 0); 
         Serial1.println("========================");
 
-        if (MASTER.loadConfig(mySD, "/CONFI~8.JSO")) {
-            isConfigLoaded = true;
-        }
+        // โหลด Config จาก SD Card ตามชื่อไฟล์ที่คุณสแกนเจอ
+        MASTER.loadConfig(mySD, "/CONFI~8.JSO"); 
     } else {
-        Serial1.println("SD Card Mount Failed!");
-    }
-
-    if (!isConfigLoaded) {
-        Serial1.println("Using Manual Config Fallback...");
-
+        Serial1.println("SD Card Mount Failed! Using Manual Config...");
+    
+    
+        // =========================================================
+        // โค้ด Manual Config (สำหรับใช้ทดสอบตอนที่ยังไม่อ่านผ่าน SD Card)
+        // =========================================================
         RS485_CONF CONFIG;
         CONFIG.ENABLE = true;
         CONFIG.STOP = 1;
@@ -133,47 +140,40 @@ void setup() {
         CONFIG.PARITY = MB_PARITY_NONE;
         CONFIG.BAUD = 9600;
         CONFIG.INTERVAL = 1000;
-        CONFIG.MAX_RESP = 1000;
+        CONFIG.MAX_RESP = 1000; // รอการตอบกลับสูงสุด 1 วินาที
         CONFIG.MAX_RETRY = 3;
         MASTER.INIT(CONFIG);
 
+        // จำลองเพิ่มช่องสัญญาณ (Channel 1: อุณหภูมิ)
         MODBUS_CH CH1;
         CH1.CH_ID = 1;
         strcpy(CH1.NAME, "TEMP");
-        CH1.SLAVE = 1;
-        CH1.ADDR = 0;
-        CH1.QTY = 1;
+        CH1.SLAVE = 1;      // ชี้ไปหา Slave ID 1
+        CH1.ADDR = 0;       // เริ่มอ่านที่ Address 0
+        CH1.QTY = 1;        // อ่านมา 1 Register (16-bit)
         CH1.TYPE = MB_HOLDING;
         CH1.ORDER = BO_AB;
         CH1.SIGN = false;
         MASTER.ADD_CH(CH1);
 
-        MODBUS_CH CH2;
-        CH2.CH_ID = 2;
-        strcpy(CH2.NAME, "HUM");
-        CH2.SLAVE = 1;
-        CH2.ADDR = 1;
-        CH2.QTY = 2;
-        CH2.TYPE = MB_INPUT;
-        CH2.ORDER = BO_ABCD;
-        CH2.SIGN = false;
-        MASTER.ADD_CH(CH2);
-
-        Serial1.println("Manual Config Loaded.");
-    }
+    
+    } // ปิดวงเล็บของ if (mySD.begin())
+    
 }
 
 void loop() {
     MASTER.FETCH_ALL();
     
+    // 1. ปริ้นค่าอุณหภูมิ (CH1)
     uint32_t raw_temp = MASTER.GET_DATA(1);
     Serial1.print("Temperature: ");
-    Serial1.print(raw_temp / 100.0);
+    Serial1.print(raw_temp / 100.0); // สมมติว่า 2550 คือ 25.50 องศา
     Serial1.println(" C");
 
+    // 2. ปริ้นค่าความชื้น (CH2)
     uint32_t raw_hum = MASTER.GET_DATA(2);
     float humidity;
-    memcpy(&humidity, &raw_hum, sizeof(humidity));
+    memcpy(&humidity, &raw_hum, sizeof(humidity)); // แปลง 32-bit กลับเป็น Float
     
     Serial1.print("Humidity: ");
     Serial1.print(humidity);

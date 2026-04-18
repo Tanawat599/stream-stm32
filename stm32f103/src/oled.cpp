@@ -16,6 +16,36 @@ void OLED::begin() {
     u8g2.begin();
 }
 
+// ===== Load Config =====
+void OLED::loadConfig(SDResourceManager& sd, const char* path) {
+    String json = sd.readFile(path);
+    if (json == "ERROR_OPEN") {
+        Serial1.print(F("OLED: failed to open config " ));
+        Serial1.println(path);
+        return;
+    }
+
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Serial1.println(F("OLED: JSON parse failed"));
+        return;
+    }
+
+    JsonObject hardware = doc["hardware"].as<JsonObject>();
+    if (!hardware.containsKey("oled")) return;
+    JsonObject oled = hardware["oled"].as<JsonObject>();
+    if (!oled.containsKey("address")) return;
+    const char* addrStr = oled["address"].as<const char*>();
+    uint8_t addr = (uint8_t) strtol(addrStr, NULL, 16);
+
+    u8g2.setI2CAddress(addr << 1);
+
+    Serial1.print(F("OLED: Address set to "));
+    Serial1.println(addrStr);
+
+}
+
 void OLED::clear() {
     u8g2.clearBuffer();
 }

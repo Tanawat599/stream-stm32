@@ -6,6 +6,33 @@
 #define SLAVE_ADDR_1 0x08
 #define SLAVE_ADDR_2 0x09
 
+// ===== Load Config =====
+void I2C::loadConfig(SDResourceManager& sd, const char* path) {
+    String json = sd.readFile(path);
+    if (json == "ERROR_OPEN") {
+        Serial1.print(F("I2C: failed to open config " ));
+        Serial1.println(path);
+        return;
+    }
+
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Serial1.println(F("I2C: JSON parse failed"));
+        return;
+    }
+
+    JsonObject hardware = doc["hardware"].as<JsonObject>();
+    if (!hardware.containsKey("i2c")) return;
+    JsonObject i2c = hardware["i2c"].as<JsonObject>();
+    if (!i2c.containsKey("frequency")) return;
+    const int freq = i2c["frequency"].as<int>();
+    Wire.setClock(freq);
+    Serial1.print(F("I2C: Frequency set to ")); Serial1.print(freq); Serial1.println(F(" Hz"));
+    const char* master_addr = i2c["master_address"].as<const char*>();
+    Serial1.print(F("I2C: Master address set to ")); Serial1.println(master_addr);
+
+}
 
 // ===== Static variables =====
 volatile bool I2C::_newData = false;
@@ -72,3 +99,4 @@ void I2C::master_sendBytes(uint8_t address, uint8_t* data, size_t len) {
   Serial1.print("Sent bytes to 0x");
   Serial1.println(address, HEX);
 }
+

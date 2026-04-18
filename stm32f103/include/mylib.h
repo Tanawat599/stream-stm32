@@ -15,7 +15,7 @@
 class LoRaP2P {
 public:
   void begin(float frequency);
-
+  void loadConfig(class SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
   void send(const char* msg);
   void sendBytes(uint8_t* data, size_t len);
 
@@ -145,10 +145,9 @@ private:
 class RS485 {
 public:
   RS485();
-  void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
 
+  // ===== Basic =====
   void begin(long baud);
-
   void setTransmit();
   void setReceive();
 
@@ -157,13 +156,156 @@ public:
 
   String receive();
   int receiveBytes(uint8_t* buffer, size_t len);
-
   bool available();
+
+  // ===== Modbus =====
+  void modbusReadHolding(uint8_t slaveId, uint16_t startAddr, uint16_t quantity);
+  int modbusReceive(uint8_t* buffer, size_t len);
 
 private:
   HardwareSerial* _serial;
   int _dePin;
   int _rePin;
+
+  // ===== Internal =====
+  uint16_t modbusCRC(uint8_t* buf, int len);
 };
 
+struct ModbusConfig {
+  bool enable;
+
+  uint32_t baudRate;
+  char parity;      // 'N','E','O'
+  uint8_t stopBits; // 1,2
+
+  uint32_t execInterval; // ms
+  uint32_t maxRespTime;  // ms
+  uint8_t maxRetry;
+
+  bool passThrough;
+};
+
+class ModbusRTU {
+public:
+  ModbusRTU(HardwareSerial& serial, int dePin, int rePin = -1);
+
+  void begin(ModbusConfig cfg);
+
+  // Master function
+  bool readHoldingRegisters(uint8_t slaveId, uint16_t startAddr, uint16_t quantity);
+
+  // Scheduler (auto interval + retry)
+  bool update(uint8_t slaveId, uint16_t startAddr, uint16_t quantity);
+
+  // Pass-through (RS485 ↔ uplink เช่น LoRa / Serial)
+  void handlePassThrough(Stream& uplink);
+
+  int available();
+
+private:
+  HardwareSerial* _serial;
+  int _dePin;
+  int _rePin;
+
+  ModbusConfig _cfg;
+  unsigned long _lastExec = 0;
+
+  void preTransmission();
+  void postTransmission();
+
+  int readResponse(uint8_t* buffer, int maxLen);
+  uint16_t crc16(uint8_t* data, int length);
+
+  uint32_t getSerialConfig();
+};
+
+struct AnalogConfig {
+  uint8_t pin;
+
+  float vref;        // เช่น 3.3 หรือ 5.0
+  int adcResolution; // เช่น 4095 (12-bit)
+
+  float shuntResistor; // เช่น 250 ohm
+
+  float minCurrent; // 4.0 mA
+  float maxCurrent; // 20.0 mA
+
+  float outMin; // เช่น 0
+  float outMax; // เช่น 100
+
+  float multiplier; // ตัวคูณ
+};
+
+// ================= CLASS =================
+class Analog420 {
+public:
+  Analog420();
+
+  void begin(AnalogConfig cfg);
+
+  float readCurrent();   // mA
+  float readVoltage();   // V
+  float readRaw();       // ADC
+  float readScaled();    // ค่าใช้งานจริง (มี multiplier)
+
+private:
+  AnalogConfig _cfg;
+};
+
+// ===================== RS485 =====================
+class SDResourceManager;
+
+// เติม Prefix เพื่อป้องกันการชนกับ Macro ของระบบ
+enum PARITY_OPT { MB_PARITY_NONE = 0, MB_PARITY_ODD, MB_PARITY_EVEN };
+enum MODBUS_TYPE { MB_COIL = 1, MB_DISCRETE = 2, MB_HOLDING = 3, MB_INPUT = 4 };
+enum MB_BYTE_ORDER { BO_AB = 0, BO_BA, BO_ABCD, BO_CDBA, BO_BADC, BO_DCBA };
+
+struct RS485_CONF {
+    bool ENABLE;
+    uint8_t STOP;
+    uint8_t DATA;
+    PARITY_OPT PARITY;
+    uint32_t BAUD;
+    uint32_t INTERVAL;
+    uint32_t MAX_RESP;
+    uint8_t MAX_RETRY;
+};
+
+struct MODBUS_CH {
+    uint8_t CH_ID;
+    char NAME[16];
+    uint8_t SLAVE;
+    uint16_t ADDR;
+    uint16_t QTY;
+    MODBUS_TYPE TYPE;
+    MB_BYTE_ORDER ORDER; // 2. เปลี่ยนตรงนี้
+    bool SIGN;
+};
+
+class MODBUS_RS485 {
+public:
+    MODBUS_RS485(HardwareSerial* PORT, uint8_t DE_PIN, uint8_t RE_PIN);
+    void INIT(RS485_CONF CONF);
+    void ADD_CH(MODBUS_CH CH);
+    bool FETCH(uint8_t ID);
+    void FETCH_ALL();
+    uint32_t GET_DATA(uint8_t ID);
+
+    // ฟังก์ชันสำหรับโหลด Config จาก SD Card
+    bool loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
+
+private:
+    HardwareSerial* _SERIAL; // เปลี่ยนชื่อเพื่อหลบ Macro SERIAL ของ Arduino
+    uint8_t _DE_PIN;
+    uint8_t _RE_PIN;
+    RS485_CONF CFG;
+    MODBUS_CH CH_LIST[32];
+    uint32_t CH_DATA[32];
+    uint8_t CH_COUNT;
+
+    uint16_t CALC_CRC16(uint8_t* BUF, uint8_t LEN); // เปลี่ยนชื่อหลบ Register CRC ของ STM32
+    uint32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER);
+    void TX_EN();
+    void RX_EN();
+};
 #endif

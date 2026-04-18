@@ -61,3 +61,53 @@ int RS485::receiveBytes(uint8_t* buffer, size_t len) {
 bool RS485::available() {
   return _serial->available();
 }
+
+uint16_t modbusCRC(uint8_t* buf, int len) {
+  uint16_t crc = 0xFFFF;
+
+  for (int pos = 0; pos < len; pos++) {
+    crc ^= (uint16_t)buf[pos];
+
+    for (int i = 0; i < 8; i++) {
+      if (crc & 0x0001) {
+        crc >>= 1;
+        crc ^= 0xA001;
+      } else {
+        crc >>= 1;
+      }
+    }
+  }
+  return crc;
+}
+
+void RS485::modbusReadHolding(uint8_t slaveId, uint16_t startAddr, uint16_t quantity) {
+  uint8_t frame[8];
+
+  frame[0] = slaveId;
+  frame[1] = 0x03;
+  frame[2] = startAddr >> 8;
+  frame[3] = startAddr & 0xFF;
+  frame[4] = quantity >> 8;
+  frame[5] = quantity & 0xFF;
+
+  uint16_t crc = modbusCRC(frame, 6);
+  frame[6] = crc & 0xFF;       // CRC Low
+  frame[7] = crc >> 8;         // CRC High
+
+  sendBytes(frame, 8);
+}
+
+int RS485::modbusReceive(uint8_t* buffer, size_t len) {
+  int n = receiveBytes(buffer, len);
+
+  if (n < 5) return -1; 
+
+  uint16_t crcCalc = modbusCRC(buffer, n - 2);
+  uint16_t crcRecv = buffer[n - 2] | (buffer[n - 1] << 8);
+
+  if (crcCalc != crcRecv) {
+    return -2; 
+  }
+
+  return n;
+}

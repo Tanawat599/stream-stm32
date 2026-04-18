@@ -27,7 +27,6 @@ static uint8_t hexCharToNibble(char c) {
 }
 
 static void parseHexToBytes(const char* hex, uint8_t* out, size_t outLen) {
-    // hex expected length = outLen*2
     for (size_t i = 0; i < outLen; i++) {
         uint8_t hi = hexCharToNibble(hex[i*2]);
         uint8_t lo = hexCharToNibble(hex[i*2 + 1]);
@@ -36,7 +35,6 @@ static void parseHexToBytes(const char* hex, uint8_t* out, size_t outLen) {
 }
 
 static uint64_t parseHexToUint64(const char* hex) {
-    // Expect up to 16 hex chars (8 bytes)
     uint64_t v = 0;
     size_t len = strlen(hex);
     // If shorter, parse as available
@@ -48,7 +46,6 @@ static uint64_t parseHexToUint64(const char* hex) {
     return v;
 }
 
-// Print 64-bit value as 16 hex chars without relying on Print::println(uint64_t)
 static void printUint64Hex(uint64_t v) {
     char buf[17];
     for (int i = 0; i < 8; i++) {
@@ -282,11 +279,11 @@ void LoRaWan::loop(const char* payload) {
             }
             Serial1.println();
         }
-        
+
     }
 }
 void LoRaWan::end() {
-    SPI.end();                            
+    SPI.end();
     digitalWrite(LORA_SS_PIN, HIGH);       
     Serial1.println(F("LoRa SPI Closed"));
 }
