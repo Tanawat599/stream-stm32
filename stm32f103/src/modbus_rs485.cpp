@@ -170,16 +170,13 @@ void MODBUS_RS485::RX_EN() {
     digitalWrite(_DE_PIN, LOW); 
     digitalWrite(_RE_PIN, LOW); 
 }
-// ---------------------------------------------------------
-// ฟังก์ชันโหลด Config อัปเดตสำหรับ ArduinoJson V7
-// ---------------------------------------------------------
-// เปลี่ยนจาก void เป็น bool
+
 bool MODBUS_RS485::loadConfig(SDResourceManager& sd, const char* path) {
     String json = sd.readFile(path);
     if (json == "ERROR_OPEN" || json.length() == 0) {
         Serial1.print(F("MODBUS: failed to open config "));
         Serial1.println(path);
-        return false; // <--- โหลดไม่ติด คืนค่า false
+        return false; 
     }
 
     DynamicJsonDocument doc(4096);
@@ -187,12 +184,12 @@ bool MODBUS_RS485::loadConfig(SDResourceManager& sd, const char* path) {
     if (err) {
         Serial1.print(F("MODBUS: JSON parse failed - "));
         Serial1.println(err.c_str());
-        return false; // <--- JSON พัง คืนค่า false
+        return false;
     }
 
     if (!doc["hardware"]["modbus_rs485"].is<JsonObject>()) {
         Serial1.println(F("MODBUS ERROR: หาคำว่า 'hardware' หรือ 'modbus_rs485' ในไฟล์ JSON ไม่เจอ!"));
-        return false; // <--- โครงสร้าง JSON ผิด คืนค่า false
+        return false; 
     }
     
     JsonObject rs485 = doc["hardware"]["modbus_rs485"];

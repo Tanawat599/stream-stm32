@@ -7,12 +7,41 @@
   },
 
   "hardware": {
-    "i2c": {
-      "sda": "PB7",
-      "scl": "PB6",
-      "frequency": 100000,
-      "master_address": "0x08"
-    },
+  "i2c": {
+    "enable": true,
+    "frequency": 100000,
+    "master_address": "0x08",
+    "interval_ms": 2000,
+    "max_resp_ms": 1000,
+    "max_retry": 3,
+    "devices": [
+      {
+        "id": 1,
+        "name": "sensor_1",
+        "address": "0x40",
+        "channels": [
+          {
+            "id": 1,
+            "name": "temperature",
+            "register": "0x00",
+            "length": 2,
+            "byte_order": "AB",
+            "type": "uint16",
+            "scale": 0.1
+          },
+          {
+            "id": 2,
+            "name": "humidity",
+            "register": "0x01",
+            "length": 2,
+            "byte_order": "AB",
+            "type": "uint16",
+            "scale": 0.1
+          }
+        ]
+      }
+    ]
+  },
 
     "oled": {
       "enabled": true,

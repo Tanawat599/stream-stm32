@@ -1,0 +1,235 @@
+// #include <Wire.h>
+// #include <Arduino.h>
+// #include "mylib.h"
+// #include "config.h"
+
+// #define SLAVE_ADDR_1 0x08
+// #define SLAVE_ADDR_2 0x09
+
+// // ===== Load Config =====
+// void I2C::loadConfig(SDResourceManager& sd, const char* path) {
+//     String json = sd.readFile(path);
+
+//     StaticJsonDocument<2048> doc;
+
+//     DeserializationError err = deserializeJson(doc, json);
+//     if (err) {
+//         Serial1.print("I2C JSON Error: ");
+//         Serial1.println(err.c_str());
+//         return;
+//     }
+//     JsonObject i2c = doc["hardware"]["i2c"];
+//     // Serial1.println("===== RAW JSON =====");
+//     // Serial1.println(json);
+//     // Serial1.println("====================");
+
+//     if (i2c.isNull()) return;
+
+//     // ===== Basic =====
+//     interval_ms = i2c["interval_ms"] | 2000;
+//     max_retry   = i2c["max_retry"]   | 3;
+//     max_resp_ms = i2c["max_resp_ms"] | 1000;
+//     enabled = i2c["enable"] | false;
+//     if (!enabled) return;
+
+//     frequency = i2c["frequency"] | 100000;
+
+//     Serial1.print("I2C: freq = ");
+//     Serial1.println(frequency);
+
+//     // ===== Devices =====
+//     devices.clear();
+
+//     JsonArray devs = i2c["devices"];
+
+//     for (JsonObject d : devs) {
+//         I2C_Device dev;
+
+//         dev.id = d["id"] | 0;
+//         dev.name = d["name"].as<String>();
+//         dev.address = parseHex(d["address"]);
+
+//         JsonArray chs = d["channels"];
+
+//         for (JsonObject c : chs) {
+//             I2C_Channel ch;
+
+//             ch.id = c["id"] | 0;
+//             ch.name = c["name"].as<String>();
+//             ch.reg = parseHex(c["register"]);
+//             ch.length = c["length"] | 1;
+//             ch.byte_order = c["byte_order"] | "AB";
+//             ch.type = c["type"] | "uint16";
+//             ch.scale = c["scale"] | 1.0;
+
+//             dev.channels.push_back(ch);
+//         }
+
+//         devices.push_back(dev);
+//     }
+
+//     Serial1.println("I2C: Config Loaded");
+// }
+
+// // ===== Static variables =====
+// volatile bool I2C::_newData = false;
+// char I2C::_buffer[32];
+// volatile int I2C::_idx = 0;
+
+// // ===== Interrupt =====
+// void I2C::receiveEvent(int howMany) {
+//   _idx = 0;
+
+//   while (Wire.available() && _idx < sizeof(_buffer) - 1) {
+//     _buffer[_idx++] = Wire.read();
+//   }
+//   _buffer[_idx] = '\0';
+
+//   _newData = true;
+// }
+
+// // ===== Slave =====
+// void I2C::slave_begin(uint8_t address) {
+//   Wire.begin(address);
+//   Wire.onReceive(receiveEvent);
+//   Serial1.begin(115200);
+//   Serial1.println("I2C Slave Started");
+// }
+
+// void I2C::slave_loop() {
+//   if (_newData) {
+//     noInterrupts();
+
+//   char temp[32];
+//   strncpy(temp, _buffer, sizeof(temp));
+//   temp[31] = '\0';
+
+//     _newData = false;
+
+//     interrupts();
+
+//     Serial1.print("Received: ");
+//     Serial1.println(temp);
+//   }
+// }
+// // ======== Helpers ========
+// uint8_t I2C::parseHex(const char* str) {
+//     if (!str) return 0;
+//     return (uint8_t) strtol(str, NULL, 16);
+// }
+
+// bool I2C::readRegister(uint8_t addr, uint8_t reg, uint8_t* buffer, uint8_t len) {
+//     Wire.beginTransmission(addr);
+//     Wire.write(reg);
+
+//     int err = Wire.endTransmission(false);
+//     if (err != 0) {
+//         Serial1.print("I2C TX Error: ");
+//         Serial1.println(err);
+//         return false;
+//     }
+
+//     Wire.requestFrom(addr, len);
+
+//     for (int i = 0; i < len; i++) {
+//         unsigned long start = millis();
+//         while (!Wire.available()) {
+//             if (millis() - start > max_resp_ms) return false; // timeout
+//         }
+//         buffer[i] = Wire.read();
+//     }
+
+//     return true;
+// }
+
+// uint32_t I2C::parseBytes(uint8_t* data, uint8_t len, const String& order) {
+//     uint32_t val = 0;
+
+//     if (order == "AB" && len == 2) {
+//         val = (data[0] << 8) | data[1];
+//     } 
+//     else if (order == "BA" && len == 2) {
+//         val = (data[1] << 8) | data[0];
+//     } 
+//     else if (order == "ABCD" && len == 4) {
+//         val = (data[0]<<24) | (data[1]<<16) | (data[2]<<8) | data[3];
+//     }
+//     else if (order == "DCBA" && len == 4) {
+//         val = (data[3]<<24) | (data[2]<<16) | (data[1]<<8) | data[0];
+//     }
+//     else {
+//         for (int i = 0; i < len; i++) {
+//             val = (val << 8) | data[i];
+//         }
+//     }
+
+//     return val;
+// }
+
+
+// // ===== Master =====
+// void I2C::master_begin() {
+//   Wire.begin(PB7, PB6);   
+//   Wire.setClock(frequency);
+//   Serial1.begin(115200);
+//   Serial1.println("I2C Master Initialized");
+// }
+
+// void I2C::master_send(uint8_t address, const char* msg) {
+//   Wire.beginTransmission(address);
+//   Wire.write((uint8_t*)msg, strlen(msg));
+//   Wire.endTransmission();
+
+//   Serial1.print("Sent to 0x");
+//   Serial1.println(address, HEX);
+// }
+
+// void I2C::master_sendBytes(uint8_t address, uint8_t* data, size_t len) {
+//   Wire.beginTransmission(address);
+//   Wire.write(data, len);
+//   Wire.endTransmission();
+
+//   Serial1.print("Sent bytes to 0x");
+//   Serial1.println(address, HEX);
+// }
+
+// void I2C::master_loop() {
+//     if (!enabled) return;
+//     if (millis() - lastPoll < interval_ms) return;
+//     lastPoll = millis();
+
+//     for (auto& dev : devices) {
+
+//         for (auto& ch : dev.channels) {
+
+//             uint8_t buffer[8];
+//             bool ok = false;
+//             if (ch.length > sizeof(buffer)) {
+//               Serial1.println("I2C: length too large");
+//               continue;
+//             }
+//             for (int retry = 0; retry < max_retry; retry++) {
+//                 if (readRegister(dev.address, ch.reg, buffer, ch.length)) {
+//                     ok = true;
+//                     break;
+//                 }
+//                 delay(5);
+//             }
+
+//             if (!ok) {
+//                 Serial1.print("I2C Fail: ");
+//                 Serial1.println(ch.name);
+//                 continue;
+//             }
+
+//             uint32_t raw = parseBytes(buffer, ch.length, ch.byte_order);
+//             float value = raw * ch.scale;
+
+//             Serial1.print(dev.name);
+//             Serial1.print(" -> ");
+//             Serial1.print(ch.name);
+//             Serial1.print(" = ");
+//             Serial1.println(value);
+//         }
+//     }
+// }

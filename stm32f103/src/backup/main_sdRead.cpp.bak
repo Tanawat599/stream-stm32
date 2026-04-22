@@ -3,7 +3,7 @@
 #include <ArduinoJson.h>
 #include "config.h"
 // ===== Object =====
-SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS); // ปรับตามบอร์ด
+SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS); 
 Logger logger(&sd);
 
 JsonDocument config;

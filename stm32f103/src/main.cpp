@@ -1,184 +1,69 @@
 // #include <Arduino.h>
+// #include "mylib.h"
 
-// #define RS485_DE_PIN PB9
-// #define RS485_RE_PIN PB8
+// // กำหนดขา SPI สำหรับ SD Card (ปรับให้ตรงกับบอร์ดของคุณ)
+// // มาตรฐาน SPI1 ของ STM32F103: MOSI=PA7, MISO=PA6, SCK=PA5, CS=PA4
+// SDResourceManager sd(PA7, PA6, PA5, PA4); 
 
-// const uint8_t SLAVE_ID = 1;
-
-// uint16_t calculate_modbus_crc(uint8_t* buf, uint8_t len) {
-//     uint16_t crc_val = 0xFFFF;
-//     for (uint8_t pos = 0; pos < len; pos++) {
-//         crc_val ^= (uint16_t)buf[pos];
-//         for (uint8_t i = 8; i != 0; i--) {
-//             if ((crc_val & 0x0001) != 0) {
-//                 crc_val >>= 1;
-//                 crc_val ^= 0xA001;
-//             } else {
-//                 crc_val >>= 1;
-//             }
-//         }
-//     }
-//     return crc_val;
-// }
+// I2C i2cMaster;
 
 // void setup() {
+//     // เริ่มต้น Serial1 (PA9=TX, PA10=RX) สำหรับดู Log
 //     Serial1.begin(115200);
-//     Serial2.begin(9600, SERIAL_8N1);
+//     delay(2000); 
     
-//     pinMode(RS485_DE_PIN, OUTPUT);
-//     pinMode(RS485_RE_PIN, OUTPUT);
-    
-//     digitalWrite(RS485_DE_PIN, LOW); 
-//     digitalWrite(RS485_RE_PIN, LOW); 
-    
-//     Serial1.println("Modbus Slave Ready on USART2. Waiting for Master...");
+//     Serial1.println(F("\n============================="));
+//     Serial1.println(F("   I2C MASTER NODE START   "));
+//     Serial1.println(F("============================="));
+
+//     // 1. เริ่มต้น SD Card (ต้องเสียบ SD Card แบบ FAT32 ให้แน่น)
+//     if (sd.begin()) {
+//         Serial1.println(F("SD Card Mounted Successfully!"));
+        
+//         // 2. โหลด Config จากไฟล์ (ใช้เทคนิค Malloc กัน RAM เต็ม)
+//         i2cMaster.loadConfig(sd, "/CONFI~8.JSO"); 
+//     } else {
+//         Serial1.println(F("CRITICAL ERROR: SD Card Mount Failed!"));
+//         Serial1.println(F("Please check wiring, 5V power, and formatted FAT32."));
+//     }
+
+//     // 3. เปิดระบบ I2C Master (เซ็ต Clock และเปิด Hardware)
+//     i2cMaster.master_begin();
 // }
 
 // void loop() {
-//     if (Serial2.available() >= 8) {
-//         uint8_t req[8];
-//         Serial2.readBytes(req, 8);
-
-//         uint16_t recv_crc = (req[7] << 8) | req[6];
-//         uint16_t comp_crc = calculate_modbus_crc(req, 6);
-
-//         if (req[0] == SLAVE_ID && recv_crc == comp_crc) {
-//             uint8_t func_code = req[1];
-//             uint16_t start_addr = (req[2] << 8) | req[3];
-//             uint16_t qty = (req[4] << 8) | req[5];
-            
-//             uint8_t resp[64];
-//             resp[0] = SLAVE_ID;
-//             resp[1] = func_code;
-//             resp[2] = qty * 2;
-            
-//             uint8_t byte_count = 3;
-
-//             // จำลองค่าส่งกลับ
-//             if (func_code == 3 && start_addr == 0) {
-//                 uint16_t mock_temp = 2550;
-//                 resp[byte_count++] = mock_temp >> 8;
-//                 resp[byte_count++] = mock_temp & 0xFF;
-//             } else if (func_code == 4 && start_addr == 1) {
-//                 float mock_hum = 65.43;
-//                 uint32_t raw_hum;
-//                 memcpy(&raw_hum, &mock_hum, sizeof(raw_hum));
-                
-//                 resp[byte_count++] = (raw_hum >> 24) & 0xFF;
-//                 resp[byte_count++] = (raw_hum >> 16) & 0xFF;
-//                 resp[byte_count++] = (raw_hum >> 8) & 0xFF;
-//                 resp[byte_count++] = raw_hum & 0xFF;
-//             } else {
-//                 for (int i = 0; i < qty * 2; i++) resp[byte_count++] = 0;
-//             }
-
-//             uint16_t res_crc = calculate_modbus_crc(resp, byte_count);
-//             resp[byte_count++] = res_crc & 0xFF;
-//             resp[byte_count++] = res_crc >> 8;
-
-//             // 🌟 ให้ Slave รอสักครู่ เพื่อให้ Master สลับกลับมารับข้อมูลทัน
-//             delay(5); 
-
-//             digitalWrite(RS485_DE_PIN, HIGH); 
-//             digitalWrite(RS485_RE_PIN, HIGH); 
-            
-//             Serial2.write(resp, byte_count);
-//             Serial2.flush();
-//             delay(2); // ป้องกันไบต์สุดท้ายหล่นหายจากฝั่ง Slave
-            
-//             digitalWrite(RS485_DE_PIN, LOW);
-//             digitalWrite(RS485_RE_PIN, LOW);
-            
-//             Serial1.println("Received request and sent response to Master.");
-//         }
-//     }
+//     // 4. วนลูปอ่านค่า (มีระบบหน่วงเวลาและ Auto-Reset I2C เมื่อค้าง)
+//     i2cMaster.master_loop();
+    
+//     delay(10); // คืนเวลาให้ CPU ไปทำอย่างอื่นบ้าง
 // }
+
 #include <Arduino.h>
 #include "mylib.h"
-#include "config.h"
 
-#define RS485_DE_PIN PB9
-#define RS485_RE_PIN PB8
+I2C i2cSlave;
 
-MODBUS_RS485 MASTER(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
-SDResourceManager mySD(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
+// กำหนด Address ของ Slave ให้ตรงกับใน JSON Config ของ Master
+const uint8_t SLAVE_ADDRESS = 0x40; 
 
 void setup() {
     Serial1.begin(115200);
-    delay(2000);
-    Serial1.println("Starting Modbus Master on USART2 (DE/RE split)...");
+    delay(2000); 
 
-    bool isConfigLoaded = false;
+    Serial1.println(F("\n============================="));
+    Serial1.println(F("   I2C SLAVE SENSOR START  "));
+    Serial1.println(F("============================="));
 
-    if (mySD.begin()) {
-        Serial1.println("SD Card Initialized.");
-        Serial1.println("=== Files in SD Card ===");
-        mySD.listFiles(Serial1, "/", 0);
-        Serial1.println("========================");
-
-        if (MASTER.loadConfig(mySD, "/CONFI~8.JSO")) {
-            isConfigLoaded = true;
-        }
-    } else {
-        Serial1.println("SD Card Mount Failed!");
-    }
-
-    if (!isConfigLoaded) {
-        Serial1.println("Using Manual Config Fallback...");
-
-        RS485_CONF CONFIG;
-        CONFIG.ENABLE = true;
-        CONFIG.STOP = 1;
-        CONFIG.DATA = 8;
-        CONFIG.PARITY = MB_PARITY_NONE;
-        CONFIG.BAUD = 9600;
-        CONFIG.INTERVAL = 1000;
-        CONFIG.MAX_RESP = 1000;
-        CONFIG.MAX_RETRY = 3;
-        MASTER.INIT(CONFIG);
-
-        MODBUS_CH CH1;
-        CH1.CH_ID = 1;
-        strcpy(CH1.NAME, "TEMP");
-        CH1.SLAVE = 1;
-        CH1.ADDR = 0;
-        CH1.QTY = 1;
-        CH1.TYPE = MB_HOLDING;
-        CH1.ORDER = BO_AB;
-        CH1.SIGN = false;
-        MASTER.ADD_CH(CH1);
-
-        MODBUS_CH CH2;
-        CH2.CH_ID = 2;
-        strcpy(CH2.NAME, "HUM");
-        CH2.SLAVE = 1;
-        CH2.ADDR = 1;
-        CH2.QTY = 2;
-        CH2.TYPE = MB_INPUT;
-        CH2.ORDER = BO_ABCD;
-        CH2.SIGN = false;
-        MASTER.ADD_CH(CH2);
-
-        Serial1.println("Manual Config Loaded.");
-    }
+    // 1. เริ่มต้น I2C โหมด Slave พร้อมผูกฟังก์ชัน onReceive และ onRequest
+    i2cSlave.slave_begin(SLAVE_ADDRESS);
+    
+    Serial1.print(F("Listening for Master on Address: 0x"));
+    Serial1.println(SLAVE_ADDRESS, HEX);
 }
 
 void loop() {
-    MASTER.FETCH_ALL();
+    // 2. คอยเช็คและปริ้นข้อความว่า Master ส่งคำสั่งมาขอ Register ตัวไหน
+    i2cSlave.slave_loop();
     
-    uint32_t raw_temp = MASTER.GET_DATA(1);
-    Serial1.print("Temperature: ");
-    Serial1.print(raw_temp / 100.0);
-    Serial1.println(" C");
-
-    uint32_t raw_hum = MASTER.GET_DATA(2);
-    float humidity;
-    memcpy(&humidity, &raw_hum, sizeof(humidity));
-    
-    Serial1.print("Humidity: ");
-    Serial1.print(humidity);
-    Serial1.println(" %");
-
-    Serial1.println("-------------------------");
-    delay(2000);
+    delay(10);
 }

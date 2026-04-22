@@ -46,6 +46,12 @@
 #define SD_SCK  PB13
 #define SD_CS   PA8
 
+// ===== SD Card =====
+#define SD_MOSI PB15
+#define SD_MISO PB14
+#define SD_SCK  PB13
+#define SD_CS   PA8
+
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
 

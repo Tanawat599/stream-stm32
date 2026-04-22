@@ -1,14 +1,15 @@
 #ifndef MYLIB_H
 #define MYLIB_H
-
+#pragma once
 #include <Arduino.h>
 #include <Wire.h>
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>
+#include <vector>
 
-#pragma once
+
 
 
 // ===================== LoRa P2P =====================
@@ -122,23 +123,52 @@ public:
 };
 
 // ===================== I2C =====================
+
+
+struct I2C_Channel {
+    String name;
+    uint8_t reg;
+    uint8_t length;
+    String byte_order;
+    float scale;
+};
+
+struct I2C_Device {
+    String name;
+    uint8_t address;
+    std::vector<I2C_Channel> channels; 
+};
+
 class I2C {
 public:
-  
-  void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
-  void slave_begin(uint8_t address);
-  void slave_loop();
-
-  void master_begin();
-  void master_send(uint8_t address, const char* msg);
-  void master_sendBytes(uint8_t address, uint8_t* data, size_t len);
+    void loadConfig(SDResourceManager& sd, const char* path);
+    void master_begin();
+    void master_loop();
+    void slave_begin(uint8_t address);
+    void slave_loop();
 
 private:
-  static void receiveEvent(int howMany);
+    // ตัวแปรที่ใช้ใน Master
+    bool _enabled = false;
+    uint32_t _frequency = 100000;  // <--- เพิ่มตัวนี้
+    uint32_t _interval_ms = 2000;
+    uint32_t _lastPoll = 0;
+    uint8_t _max_retry = 3;
+    
+    // จัดเก็บรายการอุปกรณ์
+    std::vector<I2C_Device> _devices; // <--- ต้องประกาศเป็น vector
 
-  static volatile bool _newData;
-  static char _buffer[20];
-  static volatile int _idx;
+    // Helper functions
+    bool readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_t len);
+    uint32_t processRawData(uint8_t* data, uint8_t len, String order);
+    uint8_t parseHex(const char* str);
+
+    // Slave static variables
+    static volatile bool _newData;
+    static char _buffer[32];
+    static volatile int _idx;
+    static void receiveEvent(int howMany);
+    static void requestEvent();
 };
 
 // ===================== RS485 =====================
@@ -222,18 +252,18 @@ private:
 struct AnalogConfig {
   uint8_t pin;
 
-  float vref;        // เช่น 3.3 หรือ 5.0
-  int adcResolution; // เช่น 4095 (12-bit)
+  float vref;        
+  int adcResolution; 
 
-  float shuntResistor; // เช่น 250 ohm
+  float shuntResistor; 
 
-  float minCurrent; // 4.0 mA
-  float maxCurrent; // 20.0 mA
+  float minCurrent; 
+  float maxCurrent; 
 
-  float outMin; // เช่น 0
-  float outMax; // เช่น 100
+  float outMin; 
+  float outMax; 
 
-  float multiplier; // ตัวคูณ
+  float multiplier; 
 };
 
 // ================= CLASS =================
