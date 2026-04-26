@@ -32,7 +32,7 @@
           {
             "id": 2,
             "name": "humidity",
-            "register": "0x01",
+            "register": "0x02",
             "length": 2,
             "byte_order": "AB",
             "type": "uint16",

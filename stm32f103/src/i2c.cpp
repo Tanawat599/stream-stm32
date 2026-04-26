@@ -5,15 +5,23 @@ volatile bool I2C::_newData = false;
 char I2C::_buffer[32];
 volatile int I2C::_idx = 0;
 
+volatile uint8_t I2C::_currentRegister = 0;
+uint8_t I2C::_registers[16] = {0}; 
+
+static uint16_t sensorTemp = 255; 
+static uint16_t sensorHumid = 600;
 // ==========================================
 // ===== Master Logic =====
 // ==========================================
 
 void I2C::master_begin() {
-    Wire.begin();
+Wire.begin();
     if (_frequency > 0) {
         Wire.setClock(_frequency); 
     }
+    
+
+
     Serial1.print(F("I2C Master Initialized at "));
     Serial1.print(_frequency);
     Serial1.println(F(" Hz"));
@@ -122,8 +130,19 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
         for (const auto& dev : _devices) {
             Serial1.printf(" - Device: %s [0x%02X] (%d channels)\n", dev.name.c_str(), dev.address, dev.channels.size());
             for (const auto& ch : dev.channels) {
+                // uint8_t raw[4] = {0, 0, 0, 0};
+                // if (readRegister(dev.address, ch.reg, raw, ch.length)) {
+                //     uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
+                //     float finalVal = (float)rawVal * ch.scale;
+                //     Serial1.printf("    > CH: %s [Reg:0x%02X, Len:%d, Order:%s, Scale:%.2f] -> Sample Val: %.2f\n", 
+                //                    ch.name.c_str(), ch.reg, ch.length, ch.byte_order.c_str(), ch.scale, finalVal);
+                // } else {
+                //     Serial1.printf("    > CH: %s [Reg:0x%02X] - READ FAILED!\n", 
+                //                    ch.name.c_str(), ch.reg);
+                // }
                 Serial1.printf("    > CH: %s [Reg:0x%02X, Len:%d, Order:%s, Scale:%.2f]\n", 
                                ch.name.c_str(), ch.reg, ch.length, ch.byte_order.c_str(), ch.scale);
+
             }
         }
     }
@@ -209,10 +228,15 @@ bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_
 }
 uint32_t I2C::processRawData(uint8_t* data, uint8_t len, String order) {
     uint32_t val = 0;
+    
     if (order == "AB" || order == "ABCD") { 
-        for (int i = 0; i < len; i++) val = (val << 8) | data[i];
-    } else { 
-        for (int i = len - 1; i >= 0; i--) val = (val << 8) | data[i];
+        for (int i = 0; i < len; i++) {
+            val = (val << 8) | data[i];
+        }
+    } else if (order == "BA" || order == "DCBA") { 
+        for (int i = len - 1; i >= 0; i--) {
+            val = (val << 8) | data[i];
+        }
     }
     return val;
 }
@@ -226,41 +250,51 @@ uint8_t I2C::parseHex(const char* str) {
 // ===== Slave Logic (Sensor Simulator) =====
 // ==========================================
 
-static uint16_t sensorTemp = 255; 
-static uint16_t sensorHumid = 600;
+
 
 void I2C::slave_begin(uint8_t address) {
     Wire.begin(address);
-    Wire.onReceive(receiveEvent);
+    Wire.onReceive(receiveEvent); 
     Wire.onRequest(requestEvent); 
     
     Serial1.print(F("I2C Slave Started on address: 0x"));
     Serial1.println(address, HEX);
 }
 
-void I2C::receiveEvent(int howMany) {
-    _idx = 0;
-    while (Wire.available() && _idx < sizeof(_buffer) - 1) {
-        _buffer[_idx++] = Wire.read();
+void I2C::requestEvent() {
+    _registers[0x00] = (sensorTemp >> 8) & 0xFF; // Temp High
+    _registers[0x01] = sensorTemp & 0xFF;        // Temp Low
+    _registers[0x02] = (sensorHumid >> 8) & 0xFF; // Humid High
+    _registers[0x03] = sensorHumid & 0xFF;        // Humid Low
+
+    if (_currentRegister >= sizeof(_registers)) {
+        uint8_t err = 0xFF;
+        Wire.write(&err, 1);
+        return;
     }
-    _buffer[_idx] = '\0';
-    _newData = true;
+
+    uint8_t bytesToSend = sizeof(_registers) - _currentRegister;
+
+    Wire.write(&_registers[_currentRegister], bytesToSend);
 }
 
-void I2C::requestEvent() {
-    uint8_t reg = _buffer[0]; 
-    uint8_t response[2] = {0, 0};
+void I2C::receiveEvent(int howMany) {
+    if (howMany < 1) return;
 
-    if (reg == 0x00) { 
-        response[0] = (sensorTemp >> 8) & 0xFF; // High Byte
-        response[1] = sensorTemp & 0xFF;        // Low Byte
-    } 
-    else if (reg == 0x01) { 
-        response[0] = (sensorHumid >> 8) & 0xFF; 
-        response[1] = sensorHumid & 0xFF;        
+    _currentRegister = Wire.read();
+    howMany--;
+
+    while (howMany > 0 && Wire.available()) {
+        if (_currentRegister < sizeof(_registers)) {
+            _registers[_currentRegister] = Wire.read();
+            _currentRegister++; 
+        } else {
+            Wire.read(); 
+        }
+        howMany--;
     }
 
-    Wire.write(response, 2); 
+    _newData = true;
 }
 
 void I2C::slave_loop() {

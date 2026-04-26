@@ -148,16 +148,13 @@ public:
     void slave_loop();
 
 private:
-    // ตัวแปรที่ใช้ใน Master
     bool _enabled = false;
-    uint32_t _frequency = 100000;  // <--- เพิ่มตัวนี้
+    uint32_t _frequency = 100000;  
     uint32_t _interval_ms = 2000;
     uint32_t _lastPoll = 0;
     uint8_t _max_retry = 3;
     
-    // จัดเก็บรายการอุปกรณ์
-    std::vector<I2C_Device> _devices; // <--- ต้องประกาศเป็น vector
-
+    std::vector<I2C_Device> _devices; 
     // Helper functions
     bool readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_t len);
     uint32_t processRawData(uint8_t* data, uint8_t len, String order);
@@ -169,6 +166,9 @@ private:
     static volatile int _idx;
     static void receiveEvent(int howMany);
     static void requestEvent();
+
+    static volatile uint8_t _currentRegister; 
+    static uint8_t _registers[16]; 
 };
 
 // ===================== RS485 =====================

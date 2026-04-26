@@ -13,14 +13,16 @@ void setup() {
     Serial1.println(F("\n============================="));
     Serial1.println(F("   I2C MASTER NODE START   "));
     Serial1.println(F("============================="));
-
+    
     if (sd.begin()) {
         Serial1.println(F("SD Card Mounted Successfully!"));
         
-        i2cMaster.loadConfig(sd, "/CONFI~8.JSO"); 
+        i2cMaster.loadConfig(sd, "/CONFI~19.JSO"); 
+        sd.listFiles(Serial1);
     } else {
         Serial1.println(F("CRITICAL ERROR: SD Card Mount Failed!"));
         Serial1.println(F("Please check wiring, 5V power, and formatted FAT32."));
+        
     }
 
     i2cMaster.master_begin();
@@ -29,7 +31,7 @@ void setup() {
 void loop() {
     i2cMaster.master_loop();
     
-    delay(10); // คืนเวลาให้ CPU ไปทำอย่างอื่นบ้าง
+    delay(10); 
 }
 
 // #include <Arduino.h>
