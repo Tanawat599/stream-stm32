@@ -56,12 +56,11 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
     JsonDocument doc; 
     DeserializationError err = deserializeJson(doc, buffer);
     
-    // สำคัญ: ห้าม free(buffer) ตรงนี้เด็ดขาด ปล่อยให้มันมีชีวิตอยู่จนจบฟังก์ชัน!
 
     if (err) {
         Serial1.print(F("I2C: JSON Parse Failed! Error: "));
         Serial1.println(err.c_str());
-        free(buffer); // คืน Memory ก่อนจบการทำงาน
+        free(buffer); 
         return;
     }
 
@@ -75,7 +74,7 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
         return;
     }
 
-    JsonObject i2c = hardware["i2c"]; 
+    JsonObject i2c = hardware["i2c"];
     if (i2c.isNull()) {
         Serial1.println(F("I2C: Cannot find 'i2c' key inside 'hardware'!"));
         free(buffer);
@@ -87,7 +86,6 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
     _interval_ms = i2c["interval_ms"] | 2000;
     _max_retry = i2c["max_retry"] | 3;
     
-    // เอา Wire.setClock ออกจากตรงนี้ก่อน ไปตั้งค่าตอน master_begin แทน
 
     _devices.clear();
     JsonArray devices = i2c["devices"];
@@ -95,7 +93,6 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
         I2C_Device d;
         d.name = dev["name"].as<String>();
         
-        // การเช็คว่าถ้าไม่มี address ให้ข้ามไป จะได้ไม่ค้าง
         if (!dev["address"].isNull()) {
             d.address = parseHex(dev["address"].as<const char*>());
         }
@@ -131,7 +128,6 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
         }
     }
 
-    // ภารกิจดึงข้อมูลเสร็จสิ้น คืน RAM กลับให้ระบบได้แล้ว!
     free(buffer); 
     Serial1.println(F("I2C: Initialization Complete!"));
 }
@@ -152,7 +148,6 @@ void I2C::master_loop() {
             for (auto& ch : dev.channels) {
                 uint8_t raw[4] = {0}; 
                 
-                // เริ่มกระบวนการอ่าน
                 if (readRegister(dev.address, ch.reg, raw, ch.length)) {
                     uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
                     float finalVal = (float)rawVal * ch.scale;
@@ -160,7 +155,7 @@ void I2C::master_loop() {
                     Serial1.print(F("    - "));
                     Serial1.print(ch.name);
                     Serial1.print(F(": "));
-                    Serial1.println(finalVal); // Serial.print รองรับ float ได้ปกติ
+                    Serial1.println(finalVal); 
                 } else {
                     Serial1.print(F("    - "));
                     Serial1.print(ch.name);
@@ -176,18 +171,16 @@ bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_
         Wire.beginTransmission(devAddr);
         Wire.write(regAddr);
         
-        // ใช้ false (Repeated Start) ซึ่งเป็นมาตรฐานที่ Sensor ส่วนใหญ่รวมถึง Slave ต้องการ
         uint8_t error = Wire.endTransmission(false); 
         
-        if (error == 0) { // 0 = ส่ง Address Register สำเร็จ
-            // สั่งขอข้อมูลจาก Slave
+        if (error == 0) { 
             uint8_t bytesReceived = Wire.requestFrom((uint8_t)devAddr, (uint8_t)len);
             
             if (bytesReceived == len) {
                 for (uint8_t i = 0; i < len; i++) {
                     buffer[i] = Wire.read();
                 }
-                return true; // อ่านสำเร็จ! ออกจากลูปได้เลย
+                return true; 
             } else {
                 Serial1.print(F(" [Err: Req "));
                 Serial1.print(len);
@@ -200,27 +193,25 @@ bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_
             Serial1.print(error);
             Serial1.print(F("] "));
             
-            // ======================================================
-            // ท่าไม้ตาย STM32: ถ้าเจอ Error 4 (Bus ค้าง) ให้รีเซ็ต I2C ใหม่ทันที
-            // ======================================================
+
             if (error == 4) {
                 Serial1.print(F("[Resetting I2C Bus...] "));
-                Wire.end();                // ปิดฮาร์ดแวร์ I2C
+                Wire.end();               
                 delay(10);
-                Wire.begin();              // เปิดใหม่
-                Wire.setClock(_frequency); // คืนค่า Clock
+                Wire.begin();              
+                Wire.setClock(_frequency); 
             }
         }
         
-        delay(50); // หน่วงเวลาให้ฝั่ง Slave หายใจก่อนพยายามใหม่ (Retry)
+        delay(50); 
     }
-    return false; // ลองครบจำนวน max_retry แล้วก็ยังไม่ได้
+    return false; 
 }
 uint32_t I2C::processRawData(uint8_t* data, uint8_t len, String order) {
     uint32_t val = 0;
-    if (order == "AB" || order == "ABCD") { // Big Endian
+    if (order == "AB" || order == "ABCD") { 
         for (int i = 0; i < len; i++) val = (val << 8) | data[i];
-    } else { // Little Endian (BA / DCBA)
+    } else { 
         for (int i = len - 1; i >= 0; i--) val = (val << 8) | data[i];
     }
     return val;
@@ -241,7 +232,7 @@ static uint16_t sensorHumid = 600;
 void I2C::slave_begin(uint8_t address) {
     Wire.begin(address);
     Wire.onReceive(receiveEvent);
-    Wire.onRequest(requestEvent); // <--- ผูกฟังก์ชันตอบกลับ
+    Wire.onRequest(requestEvent); 
     
     Serial1.print(F("I2C Slave Started on address: 0x"));
     Serial1.println(address, HEX);
@@ -256,22 +247,20 @@ void I2C::receiveEvent(int howMany) {
     _newData = true;
 }
 
-// ฟังก์ชันนี้จะทำงานเมื่อ Master สั่ง Wire.requestFrom()
 void I2C::requestEvent() {
-    // เช็คว่า Master ขออ่าน Register อะไร (ซึ่ง Master เพิ่งส่งมาทาง receiveEvent)
     uint8_t reg = _buffer[0]; 
     uint8_t response[2] = {0, 0};
 
-    if (reg == 0x00) { // ขออุณหภูมิ (Register 0x00)
+    if (reg == 0x00) { 
         response[0] = (sensorTemp >> 8) & 0xFF; // High Byte
         response[1] = sensorTemp & 0xFF;        // Low Byte
     } 
-    else if (reg == 0x01) { // ขอความชื้น (Register 0x01)
+    else if (reg == 0x01) { 
         response[0] = (sensorHumid >> 8) & 0xFF; 
         response[1] = sensorHumid & 0xFF;        
     }
 
-    Wire.write(response, 2); // ส่งข้อมูล 2 Bytes กลับไปหา Master
+    Wire.write(response, 2); 
 }
 
 void I2C::slave_loop() {
