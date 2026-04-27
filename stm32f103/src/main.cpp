@@ -1,62 +1,54 @@
 #include <Arduino.h>
 #include "mylib.h"
+#include "config.h"
+#include <SPI.h>
 
-
-SDResourceManager sd(PA7, PA6, PA5, PA4); 
-
-I2C i2cMaster;
+// Objects
+SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
+Logger logger(&sd);
+LoRaWan lorawan;
 
 void setup() {
-    Serial1.begin(115200);
-    delay(2000); 
-    
-    Serial1.println(F("\n============================="));
-    Serial1.println(F("   I2C MASTER NODE START   "));
-    Serial1.println(F("============================="));
-    
+    Serial1.begin(SERIAL_BAUD);
+    delay(1000); 
+
+    Serial1.println("\n\n--- System Booting ---");
+
+    pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
+    pinMode(LORA_SS_PIN, OUTPUT); digitalWrite(LORA_SS_PIN, HIGH);
+
+    Serial1.println("--- Reading SD Card Config ---");
+
+    SPI.setSCLK(SD_SCK);
+    SPI.setMISO(SD_MISO);
+    SPI.setMOSI(SD_MOSI);
+    SPI.begin(); 
+
     if (sd.begin()) {
-        Serial1.println(F("SD Card Mounted Successfully!"));
-        
-        i2cMaster.loadConfig(sd, "/CONFI~19.JSO"); 
+        logger.logMsg("SYSTEM", "SD initialized");
         sd.listFiles(Serial1);
+        lorawan.loadConfig(sd, "/CONFI~21.JSO");
+        Serial1.println("SD Config Loaded.");
     } else {
-        Serial1.println(F("CRITICAL ERROR: SD Card Mount Failed!"));
-        Serial1.println(F("Please check wiring, 5V power, and formatted FAT32."));
-        
+        Serial1.println("SD init failed!");
     }
 
-    i2cMaster.master_begin();
-}
+    Serial1.println("--- Starting LoRaWAN ---");
+    
+    SPI.end(); 
+    digitalWrite(SD_CS, HIGH); 
+    delay(100);
 
+    SPI.setSCLK(PA5);
+    SPI.setMISO(PA6);
+    SPI.setMOSI(PA7);
+    SPI.begin(); 
+    
+    lorawan.begin();
+
+    logger.logMsg("SYSTEM", "LoRa initialized");
+}
 void loop() {
-    i2cMaster.master_loop();
-    
-    delay(10); 
+    lorawan.loop("Hello");
+    delay(5000);
 }
-
-// #include <Arduino.h>
-// #include "mylib.h"
-
-// I2C i2cSlave;
-
-// const uint8_t SLAVE_ADDRESS = 0x40; 
-
-// void setup() {
-//     Serial1.begin(115200);
-//     delay(2000); 
-
-//     Serial1.println(F("\n============================="));
-//     Serial1.println(F("   I2C SLAVE SENSOR START  "));
-//     Serial1.println(F("============================="));
-
-//     i2cSlave.slave_begin(SLAVE_ADDRESS);
-    
-//     Serial1.print(F("Listening for Master on Address: 0x"));
-//     Serial1.println(SLAVE_ADDRESS, HEX);
-// }
-
-// void loop() {
-//     i2cSlave.slave_loop();
-    
-//     delay(10);
-// }

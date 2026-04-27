@@ -34,7 +34,7 @@
             "name": "humidity",
             "register": "0x02",
             "length": 2,
-            "byte_order": "AB",
+            "byte_order": "BA",
             "type": "uint16",
             "scale": 0.1
           }
@@ -56,10 +56,15 @@
     },
 
     "analog": {
+      "enable": true,
       "pin": "PA4",
       "scale": {
         "min": 4,
         "max": 20
+      },
+      "factor": {
+        "slope": 1.0,
+        "intercept": 0.0
       }
     },
     "modbus_rs485": {
@@ -125,6 +130,7 @@
   },
 
   "lora": {
+    "enabled": true,
     "pins": {
       "ss": "PB11",
       "rst": "PB12",
@@ -135,7 +141,7 @@
     "region": "AS923",
 
     "lorawan": {
-      "mode": "OTAA",
+      "mode": "ABP",
 
       "otaa": {
         "join_eui": "FC644250F0DB9BE9",
@@ -145,13 +151,23 @@
       },
 
       "abp": {
-        "dev_addr": "26011BDA",
-        "nwk_skey": "2B7E151628AED2A6ABF7158809CF4F3C",
-        "app_skey": "2B7E151628AED2A6ABF7158809CF4F3C"
+        "dev_addr": "01b3bb05",
+        "nwk_skey": "9603718ec7d6a70fd78ab4daeb5c9224",
+        "app_skey": "af550b69d4c6e505fada5c6ea77953e8"
       },
 
-      "class": "C",
+      "class": {
+        "class_type": "A",
+        "class_c":{
+          "continuous_rx": true
+        },
+        "class_a": {
+          "rx1_delay_ms": 1000,
+          "rx1_data_rate": "DR5",
+          "uplink_interval_min": 60
+        }
 
+      },
       "rx2": {
         "frequency": 923525000,
         "data_rate": "DR0"
@@ -163,7 +179,7 @@
         "adr": true
       },
 
-      "confirmed_uplink": false,
+      "confirmed_uplink": true,
       "fport": 2,
       "duty_cycle": true
     }
