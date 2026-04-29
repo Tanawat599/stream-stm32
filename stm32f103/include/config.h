@@ -52,6 +52,11 @@
 #define SD_SCK  PB13
 #define SD_CS   PA8
 
+// ===== LS Switch =====
+#define LS_SW_PIN PB5
+
+
+
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200
 

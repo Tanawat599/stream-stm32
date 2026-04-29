@@ -223,13 +223,10 @@ public:
 
   void begin(ModbusConfig cfg);
 
-  // Master function
   bool readHoldingRegisters(uint8_t slaveId, uint16_t startAddr, uint16_t quantity);
 
-  // Scheduler (auto interval + retry)
   bool update(uint8_t slaveId, uint16_t startAddr, uint16_t quantity);
 
-  // Pass-through (RS485 ↔ uplink เช่น LoRa / Serial)
   void handlePassThrough(Stream& uplink);
 
   int available();
@@ -278,7 +275,7 @@ public:
   float readCurrent();   // mA
   float readVoltage();   // V
   float readRaw();       // ADC
-  float readScaled();    // ค่าใช้งานจริง (มี multiplier)
+  float readScaled();    
 
 private:
   AnalogConfig _cfg;
@@ -323,11 +320,10 @@ public:
     void FETCH_ALL();
     uint32_t GET_DATA(uint8_t ID);
 
-    // ฟังก์ชันสำหรับโหลด Config จาก SD Card
     bool loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
 
 private:
-    HardwareSerial* _SERIAL; // เปลี่ยนชื่อเพื่อหลบ Macro SERIAL ของ Arduino
+    HardwareSerial* _SERIAL; 
     uint8_t _DE_PIN;
     uint8_t _RE_PIN;
     RS485_CONF CFG;
@@ -335,9 +331,42 @@ private:
     uint32_t CH_DATA[32];
     uint8_t CH_COUNT;
 
-    uint16_t CALC_CRC16(uint8_t* BUF, uint8_t LEN); // เปลี่ยนชื่อหลบ Register CRC ของ STM32
+    uint16_t CALC_CRC16(uint8_t* BUF, uint8_t LEN);
     uint32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER);
     void TX_EN();
     void RX_EN();
 };
+
+extern "C" {
+  #include "stm32f1xx_hal.h"
+}
+
+typedef struct {
+    bool ENABLE;
+    GPIO_TypeDef* PORT;
+    uint16_t PIN;
+    bool INVERTED;
+    GPIO_PinState DEFAULT_STATE;
+    uint32_t MODE;
+    uint32_t PULL;
+    uint32_t SPEED;
+    uint32_t STARTUP_DELAY;
+} LS_CONF;
+
+class LowSideSwitch {
+private:
+    LS_CONF conf;
+
+public:
+    LowSideSwitch();
+
+    bool loadConfig(SDResourceManager& sd, const char* path);
+    void begin();
+
+    void on();
+    void off();
+    void toggle();
+};
+
+
 #endif

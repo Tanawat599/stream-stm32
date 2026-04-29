@@ -27,7 +27,8 @@ void setup() {
     if (sd.begin()) {
         logger.logMsg("SYSTEM", "SD initialized");
         sd.listFiles(Serial1);
-        lorawan.loadConfig(sd, "/CONFI~21.JSO");
+        const char* name = sd.getConfig();
+        lorawan.loadConfig(sd, name);
         Serial1.println("SD Config Loaded.");
     } else {
         Serial1.println("SD init failed!");

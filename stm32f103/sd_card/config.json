@@ -94,6 +94,16 @@
           "sign": false
         }
       ]
+    },
+    "ls_sw": {
+      "enable": true,
+      "pin": "PB5",
+      "inverted": false,
+      "default_state": "off",
+      "mode": "push_pull",
+      "pull": "none",
+      "speed": "low",
+      "startup_delay_ms": 10
     }
   },
   "logging": {

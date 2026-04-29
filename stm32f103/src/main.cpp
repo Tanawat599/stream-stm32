@@ -1,55 +1,21 @@
 #include <Arduino.h>
 #include "mylib.h"
 #include "config.h"
-#include <SPI.h>
 
-// Objects
-SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
-Logger logger(&sd);
-LoRaWan lorawan;
+LowSideSwitch ls;
 
 void setup() {
-    Serial1.begin(SERIAL_BAUD);
-    delay(1000); 
+    SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
 
-    Serial1.println("\n\n--- System Booting ---");
-
-    pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
-    pinMode(LORA_SS_PIN, OUTPUT); digitalWrite(LORA_SS_PIN, HIGH);
-
-    Serial1.println("--- Reading SD Card Config ---");
-
-    SPI.setSCLK(SD_SCK);
-    SPI.setMISO(SD_MISO);
-    SPI.setMOSI(SD_MOSI);
-    SPI.begin(); 
-
-    if (sd.begin()) {
-        logger.logMsg("SYSTEM", "SD initialized");
-        sd.listFiles(Serial1);
-        const char* name = sd.getConfig();
-        lorawan.loadConfig(sd, name);
-        Serial1.println("SD Config Loaded.");
-    } else {
-        Serial1.println("SD init failed!");
+    if (ls.loadConfig(sd, "/config.json")) {
+        ls.begin();
     }
-
-    Serial1.println("--- Starting LoRaWAN ---");
-    
-    SPI.end(); 
-    digitalWrite(SD_CS, HIGH); 
-    delay(100);
-
-    SPI.setSCLK(PA5);
-    SPI.setMISO(PA6);
-    SPI.setMOSI(PA7);
-    SPI.begin(); 
-    
-    lorawan.begin();
-
-    logger.logMsg("SYSTEM", "LoRa initialized");
 }
+
 void loop() {
-    lorawan.loop("Hello");
-    delay(5000);
+    ls.on();
+    delay(1000);
+
+    ls.off();
+    delay(1000);
 }
