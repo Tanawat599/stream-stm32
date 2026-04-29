@@ -97,7 +97,6 @@ void LoRaWan::setMode(LoRaClassMode mode) {
 }
 
 // ===== SETUP =====
-// ===== SETUP =====
 void LoRaWan::begin() {
     Serial1.println(F("\nLoRaWAN Hybrid"));
 
@@ -119,10 +118,10 @@ void LoRaWan::begin() {
         state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
         state = node.activateOTAA();
         
-        while (state != RADIOLIB_LORAWAN_NEW_SESSION) {
+        while (state != RADIOLIB_LORAWAN_NEW_SESSION && state != -1108) {
             Serial1.print(F("Join fail (OTAA), code: "));
             Serial1.println(state);
-            Serial1.println(F("Retrying in 30 seconds..."));
+            Serial1.println(F("Retrying in 20 seconds..."));
             
             delay(20000); 
             
@@ -315,13 +314,18 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 
-    // ================= UPLINK =================
+    // ================= UPLINK (สำหรับทั้ง Class A และ C) =================
     if (millis() - lastSend >= uplinkIntervalMs) {
         lastSend = millis();
 
         Serial1.println(F("\n===== UPLINK ====="));
         Serial1.print(F("Payload: "));
         Serial1.println(payload);
+        Serial1.print(F("FPort: ")); Serial1.println(currentFPort);
+        Serial1.print(uplinkIntervalMs); Serial1.println(F(" ms interval"));
+
+        uint8_t rxBuffer[255];
+        size_t rxLen = 0;
 
         int16_t state = node.sendReceive(
             (uint8_t*)payload,
@@ -332,10 +336,17 @@ void LoRaWan::loop(const char* payload) {
 
         if (state >= RADIOLIB_ERR_NONE) {
             Serial1.print(F("[UPLINK] Success! "));
-            if (state == 0) Serial1.println(F("(No Downlink)"));
-            else if (state == 1) Serial1.println(F("(Downlink in RX1)"));
-            else if (state == 2) Serial1.println(F("(Downlink in RX2)"));
-            else if (state == 3) Serial1.println(F("(Downlink in RXC)"));
+            if (state == 0) {
+                Serial1.println(F("(No Downlink)"));
+            } 
+            else if (state == 1 || state == 2) {
+                Serial1.print(F("(Downlink in RX")); Serial1.print(state); Serial1.println(F(")"));
+                
+
+            }
+            else if (state == 3) {
+                Serial1.println(F("(Downlink in RXC)"));
+            }
         } 
         else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
             Serial1.println(F("[UPLINK] NO ACK (Confirmed Uplink Failed)"));
@@ -347,28 +358,30 @@ void LoRaWan::loop(const char* payload) {
     }
 
     // ================= CLASS C DOWNLINK =================
-    uint8_t buf[255];
-    size_t len = 0;
-    int16_t dl = node.getDownlinkClassC(buf, &len, NULL);
+    if (currentMode == CLASS_C) {
+        uint8_t buf[255];
+        size_t len = 0;
+        int16_t dl = node.getDownlinkClassC(buf, &len, NULL);
 
-    if (dl > 0 && len > 0) {
-        Serial1.println(F("\n===== DOWNLINK RECEIVED ====="));
-        Serial1.print(F("From Window: ")); Serial1.println(dl);
-        
-        Serial1.print(F("HEX: "));
-        for (size_t i = 0; i < len; i++) {
-            if (buf[i] < 0x10) Serial1.print('0');
-            Serial1.print(buf[i], HEX); Serial1.print(" ");
-        }
-        Serial1.println();
+        if (dl > 0 && len > 0) {
+            Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS C) ====="));
+            Serial1.print(F("From Window: ")); Serial1.println(dl);
+            
+            Serial1.print(F("HEX: "));
+            for (size_t i = 0; i < len; i++) {
+                if (buf[i] < 0x10) Serial1.print('0');
+                Serial1.print(buf[i], HEX); Serial1.print(" ");
+            }
+            Serial1.println();
 
-        Serial1.print(F("TEXT: "));
-        for (size_t i = 0; i < len; i++) {
-            if (isprint(buf[i])) Serial1.print((char)buf[i]);
-            else Serial1.print('.');
+            Serial1.print(F("TEXT: "));
+            for (size_t i = 0; i < len; i++) {
+                if (isprint(buf[i])) Serial1.print((char)buf[i]);
+                else Serial1.print('.');
+            }
+            Serial1.println();
+            Serial1.println(F("============================"));
         }
-        Serial1.println();
-        Serial1.println(F("============================"));
     }
 }
 
