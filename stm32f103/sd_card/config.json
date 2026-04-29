@@ -5,56 +5,52 @@
     "id": "stm32f103_node_001",
     "uid": "66EFF303436474257135038"
   },
-
   "hardware": {
-  "i2c": {
-    "enable": true,
-    "frequency": 100000,
-    "master_address": "0x08",
-    "interval_ms": 2000,
-    "max_resp_ms": 1000,
-    "max_retry": 3,
-    "devices": [
-      {
-        "id": 1,
-        "name": "sensor_1",
-        "address": "0x40",
-        "channels": [
-          {
-            "id": 1,
-            "name": "temperature",
-            "register": "0x00",
-            "length": 2,
-            "byte_order": "AB",
-            "type": "uint16",
-            "scale": 0.1
-          },
-          {
-            "id": 2,
-            "name": "humidity",
-            "register": "0x02",
-            "length": 2,
-            "byte_order": "BA",
-            "type": "uint16",
-            "scale": 0.1
-          }
-        ]
-      }
-    ]
-  },
-
+    "i2c": {
+      "enable": true,
+      "frequency": 100000,
+      "master_address": "0x08",
+      "interval_ms": 2000,
+      "max_resp_ms": 1000,
+      "max_retry": 3,
+      "devices": [
+        {
+          "id": 1,
+          "name": "sensor_1",
+          "address": "0x40",
+          "channels": [
+            {
+              "id": 1,
+              "name": "temperature",
+              "register": "0x00",
+              "length": 2,
+              "byte_order": "AB",
+              "type": "uint16",
+              "scale": 0.1
+            },
+            {
+              "id": 2,
+              "name": "humidity",
+              "register": "0x02",
+              "length": 2,
+              "byte_order": "BA",
+              "type": "uint16",
+              "scale": 0.1
+            }
+          ]
+        }
+      ]
+    },
     "oled": {
       "enabled": true,
       "sda": "PB7",
       "scl": "PB6",
       "address": "0x3C"
     },
-
     "led": {
       "pin": "PA12",
       "active_low": false
     },
-
     "analog": {
       "enable": true,
       "pin": "PA4",
@@ -100,20 +96,17 @@
       ]
     }
   },
-
   "logging": {
     "enabled": true,
     "level": "INFO",
     "sd_log": true
   },
-
   "communication": {
     "serial": {
       "port": "Serial1",
       "baud": 115200,
       "timeout": 1000
     },
-
     "rs485": {
       "port": "Serial2",
       "de_pin": "PA8",
@@ -125,10 +118,12 @@
         "stop_bits": 1,
         "parity": "none"
       },
-      "slaves": ["0x08", "0x09"]
+      "slaves": [
+        "0x08",
+        "0x09"
+      ]
     }
   },
-
   "lora": {
     "enabled": true,
     "pins": {
@@ -137,49 +132,44 @@
       "dio0": "PB0",
       "dio1": "PB1"
     },
-
     "region": "AS923",
-
     "lorawan": {
-      "mode": "ABP",
-
+      "mode": "OTAA",
       "otaa": {
-        "join_eui": "FC644250F0DB9BE9",
-        "dev_eui": "9F75EDA1CF67BF63",
-        "nwk_key": "B229498BBFC7D8E6D2DB8104D38A4D24",
-        "app_key": "B229498BBFC7D8E6D2DB8104D38A4D24"
+        "join_eui": "E63BA610B2498DBE",
+        "dev_eui": "C304DB83070E0063",
+        "nwk_key": "28A77CA4837A951F42A2D7A31493043C",
+        "app_key": "28A77CA4837A951F42A2D7A31493043C"
       },
-
       "abp": {
         "dev_addr": "01b3bb05",
         "nwk_skey": "9603718ec7d6a70fd78ab4daeb5c9224",
         "app_skey": "af550b69d4c6e505fada5c6ea77953e8"
       },
-
       "class": {
-        "class_type": "A",
-        "class_c":{
+        "class_type": "C",
+        "class_c": {
           "continuous_rx": true
         },
         "class_a": {
-          "rx1_delay_ms": 1000,
+          "rx1_delay_ms": 500,
           "rx1_data_rate": "DR5",
+          
           "uplink_interval_min": 60
         }
-
       },
+      "uplink_interval_sec": 20,
       "rx2": {
-        "frequency": 923525000,
-        "data_rate": "DR0"
+        "frequency": 923200000,
+        "data_rate": "DR2"
       },
-
       "tx": {
         "sf": 7,
         "power": 14,
         "adr": true
       },
-
-      "confirmed_uplink": true,
+      "confirmed_uplink": false,
+      
       "fport": 2,
       "duty_cycle": true
     }

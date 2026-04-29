@@ -58,6 +58,8 @@ public:
     String getLoRaKey() { return _loraKey; }
     int getSensorPin() { return _pin; }
 
+    const char* getConfig();
+
     bool writeLog(const char* message);
     void end();
 

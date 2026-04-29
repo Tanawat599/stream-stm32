@@ -116,14 +116,18 @@ void LoRaWan::begin() {
     if (currentActivation == MODE_OTAA) {
         Serial1.println(F("Joining via OTAA..."));
         
-        // 🚨 แก้ไขจุดที่ 1: เปลี่ยน NULL เป็น nwkKey แบบโค้ดต้นแบบ
         state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
         state = node.activateOTAA();
         
-        if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
+        while (state != RADIOLIB_LORAWAN_NEW_SESSION) {
             Serial1.print(F("Join fail (OTAA), code: "));
             Serial1.println(state);
-            while (true);
+            Serial1.println(F("Retrying in 30 seconds..."));
+            
+            delay(20000); 
+            
+            Serial1.println(F("Re-Joining via OTAA..."));
+            state = node.activateOTAA(); 
         }
         Serial1.println(F("Joined OTAA successfully"));
     } else {
@@ -250,12 +254,12 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
                 setMode(CLASS_C);
             }
         }
-        if (cls.containsKey("class_a")) {
-        JsonObject clsA = cls["class_a"];
-        if (clsA.containsKey("uplink_interval_sec")) {
-            uplinkIntervalMs = clsA["uplink_interval_sec"].as<unsigned long>() * 1000UL;
+        if (lorawan.containsKey("uplink_interval_sec")) {
+
+            uplinkIntervalMs = lorawan["uplink_interval_sec"].as<unsigned long>() * 1000UL;
+            Serial1.print("uplinkIntervalMs :"); Serial1.println(uplinkIntervalMs);
+        
         }
-}
     }
 
     if (lorawan.containsKey("tx")) {
@@ -298,7 +302,7 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
             else if (strcmp(rx2DR_str, "DR4") == 0) dr_val = 4;
             else if (strcmp(rx2DR_str, "DR5") == 0) dr_val = 5;
 
-            //node.setRx2Dr(dr_val);
+            node.setRx2Dr(dr_val);
             
             Serial1.print(F("LoRa: RX2 Data Rate applied as DR"));
             Serial1.println(dr_val);
@@ -326,7 +330,6 @@ void LoRaWan::loop(const char* payload) {
             currentAck
         );
 
-        // แก้ไขเงื่อนไขตรงนี้: 0 หรือมากกว่า 0 คือสำเร็จทั้งหมด
         if (state >= RADIOLIB_ERR_NONE) {
             Serial1.print(F("[UPLINK] Success! "));
             if (state == 0) Serial1.println(F("(No Downlink)"));
@@ -348,7 +351,6 @@ void LoRaWan::loop(const char* payload) {
     size_t len = 0;
     int16_t dl = node.getDownlinkClassC(buf, &len, NULL);
 
-    // เช็คค่า dl > 0 ตามโค้ดต้นแบบที่คุณหามา (ถูกต้องที่สุด)
     if (dl > 0 && len > 0) {
         Serial1.println(F("\n===== DOWNLINK RECEIVED ====="));
         Serial1.print(F("From Window: ")); Serial1.println(dl);

@@ -30,9 +30,43 @@ void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTa
         } else {
             serial.printf("\t\t%d bytes\n", entry.size());
         }
+
         entry.close();
     }
     dir.close();
+}
+
+const char* SDResourceManager::getConfig() {
+    static char result[32];  // buffer คงที่
+
+    File root = SD.open("/");
+    if (!root) {
+        strcpy(result, "ERROR_OPEN");
+        return result;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+
+        String name = file.name();
+
+        if (!file.isDirectory() &&
+            name.startsWith("CONFI") &&
+            name.endsWith(".JSO")) {
+
+            name.toCharArray(result, sizeof(result));
+
+            file.close();
+            root.close();
+            return result;
+        }
+
+        file = root.openNextFile();
+    }
+
+    root.close();
+    strcpy(result, "NOT_FOUND");
+    return result;
 }
 
 String SDResourceManager::readFile(const char* path) {
