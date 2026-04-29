@@ -22,10 +22,10 @@ SX1276 radio(&module);
 LoRaWANNode node(&radio, &AS923);
 
 // ===== OTAA Keys (Defaults) =====
-uint64_t joinEUI = 0xFC644250F0DB9BE9;
-uint64_t devEUI  = 0x9F75EDA1CF67BF63;
-uint8_t appKey[16] = { 0xB2, 0x29, 0x49, 0x8B, 0xBF, 0xC7, 0xD8, 0xE6, 0xD2, 0xDB, 0x81, 0x04, 0xD3, 0x8A, 0x4D, 0x24};
-uint8_t nwkKey[16] = { 0xB2, 0x29, 0x49, 0x8B, 0xBF, 0xC7, 0xD8, 0xE6, 0xD2, 0xDB, 0x81, 0x04, 0xD3, 0x8A, 0x4D, 0x24};
+uint64_t joinEUI = 0xE63BA610B2498DBE;
+uint64_t devEUI  = 0xC304DB83070E0063;
+uint8_t appKey[16] = { 0x28, 0xA7, 0x7C, 0xA4, 0x83, 0x7A, 0x95, 0x1F, 0x42, 0xA2, 0xD7, 0xA3, 0x14, 0x93, 0x04, 0x3C};
+uint8_t nwkKey[16] = { 0x28, 0xA7, 0x7C, 0xA4, 0x83, 0x7A, 0x95, 0x1F, 0x42, 0xA2, 0xD7, 0xA3, 0x14, 0x93, 0x04, 0x3C};
 
 // ===== ABP Keys (Defaults) =====
 uint32_t devAddr = 0x00000000;
@@ -97,6 +97,7 @@ void LoRaWan::setMode(LoRaClassMode mode) {
 }
 
 // ===== SETUP =====
+// ===== SETUP =====
 void LoRaWan::begin() {
     Serial1.println(F("\nLoRaWAN Hybrid"));
 
@@ -114,8 +115,11 @@ void LoRaWan::begin() {
 
     if (currentActivation == MODE_OTAA) {
         Serial1.println(F("Joining via OTAA..."));
-        state = node.beginOTAA(joinEUI, devEUI, NULL, appKey);
+        
+        // 🚨 แก้ไขจุดที่ 1: เปลี่ยน NULL เป็น nwkKey แบบโค้ดต้นแบบ
+        state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
         state = node.activateOTAA();
+        
         if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
             Serial1.print(F("Join fail (OTAA), code: "));
             Serial1.println(state);
@@ -133,11 +137,11 @@ void LoRaWan::begin() {
         }
         Serial1.println(F("Activated ABP successfully"));
     }
+    
     if (state == RADIOLIB_LORAWAN_NEW_SESSION || state == RADIOLIB_ERR_NONE) {
         Serial1.println(F("Activation Success! Applying Config..."));
 
         node.setADR(currentADR); 
-
 
         uint8_t dr = 12 - currentSF; 
         if (dr > 5) dr = 5; 
@@ -146,8 +150,10 @@ void LoRaWan::begin() {
         Serial1.print(F("LoRa: ADR is ")); Serial1.println(currentADR ? F("ON") : F("OFF"));
         Serial1.print(F("LoRa: SF forced to ")); Serial1.println(currentSF);
     }
+    
     setMode(currentMode);
 
+    lastSend = millis() - uplinkIntervalMs;
 }
 
 // ===== CONFIG =====
@@ -277,6 +283,27 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
         node.setDutyCycle(duty);
         Serial1.print(F("LoRa: Duty Cycle set: ")); Serial1.println(duty ? "ON" : "OFF");
     }
+    if (lorawan.containsKey("rx2")) {
+        JsonObject rx2 = lorawan["rx2"].as<JsonObject>();
+        Serial1.println(F("LoRa: RX2 Config found"));
+        
+        if (rx2.containsKey("data_rate")) {
+            const char* rx2DR_str = rx2["data_rate"];
+            uint8_t dr_val = 2;
+            
+            if (strcmp(rx2DR_str, "DR0") == 0) dr_val = 0;
+            else if (strcmp(rx2DR_str, "DR1") == 0) dr_val = 1;
+            else if (strcmp(rx2DR_str, "DR2") == 0) dr_val = 2;
+            else if (strcmp(rx2DR_str, "DR3") == 0) dr_val = 3;
+            else if (strcmp(rx2DR_str, "DR4") == 0) dr_val = 4;
+            else if (strcmp(rx2DR_str, "DR5") == 0) dr_val = 5;
+
+            //node.setRx2Dr(dr_val);
+            
+            Serial1.print(F("LoRa: RX2 Data Rate applied as DR"));
+            Serial1.println(dr_val);
+        }
+    }
 
 
 }
@@ -284,79 +311,68 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 
-    if (millis() - lastSend > uplinkIntervalMs) {
+    // ================= UPLINK =================
+    if (millis() - lastSend >= uplinkIntervalMs) {
         lastSend = millis();
 
-        Serial1.print(F("Sending: "));
+        Serial1.println(F("\n===== UPLINK ====="));
+        Serial1.print(F("Payload: "));
         Serial1.println(payload);
 
-        int16_t state = node.sendReceive((uint8_t*)payload, strlen(payload), currentFPort, currentAck);
+        int16_t state = node.sendReceive(
+            (uint8_t*)payload,
+            strlen(payload),
+            currentFPort,
+            currentAck
+        );
 
-        if (state == RADIOLIB_LORAWAN_NEW_SESSION || state == RADIOLIB_ERR_NONE || state > 0) {
-if (state > 0) {
-            Serial1.println(F("[A] Uplink OK & ACK Received!"));
-            
-            String strDown;
-            int16_t res = radio.readData(strDown); 
-            
-            if (res == RADIOLIB_ERR_NONE && strDown.length() > 0) {
-                Serial1.print(F("--> Received Payload: "));
-                
-                // ตรวจสอบว่าเป็นข้อความที่ "มนุษย์อ่านออก" หรือไม่
-                bool readable = true;
-                for (size_t i = 0; i < strDown.length(); i++) {
-                    if (!isprint(strDown[i])) { // ใช้ isprint (ตัวพิมพ์เล็กหมด)
-                        readable = false;
-                        break;
-                    }
-                }
-
-                if (readable) {
-                    Serial1.println(strDown);
-                } else {
-                    Serial1.print(F("(Binary/MAC Command) Hex: "));
-                    for (size_t i = 0; i < strDown.length(); i++) {
-                        if ((unsigned char)strDown[i] < 0x10) Serial1.print('0');
-                        Serial1.print((unsigned char)strDown[i], HEX);
-                        Serial1.print(" ");
-                    }
-                    Serial1.println();
-                }
-            }
-        } else {
-                Serial1.println(F("[A] Uplink OK (No Downlink)"));
-            }
+        // แก้ไขเงื่อนไขตรงนี้: 0 หรือมากกว่า 0 คือสำเร็จทั้งหมด
+        if (state >= RADIOLIB_ERR_NONE) {
+            Serial1.print(F("[UPLINK] Success! "));
+            if (state == 0) Serial1.println(F("(No Downlink)"));
+            else if (state == 1) Serial1.println(F("(Downlink in RX1)"));
+            else if (state == 2) Serial1.println(F("(Downlink in RX2)"));
+            else if (state == 3) Serial1.println(F("(Downlink in RXC)"));
         } 
-        else {
-            Serial1.print(F("[A] State Error: "));
-            Serial1.println(state);
-
+        else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
+            Serial1.println(F("[UPLINK] NO ACK (Confirmed Uplink Failed)"));
         }
-        Serial1.println(F("-------------------"));
+        else {
+            Serial1.print(F("[UPLINK] ACTUAL ERROR: "));
+            Serial1.println(state);
+        }
     }
 
-    // ===== CLASS C RECEIVE =====
-    if (currentMode == CLASS_C) {
+    // ================= CLASS C DOWNLINK =================
+    uint8_t buf[255];
+    size_t len = 0;
+    int16_t dl = node.getDownlinkClassC(buf, &len, NULL);
 
-        uint8_t downlink[255];
-        size_t len = 0;
-        LoRaWANEvent_t event;
-
-        int16_t state = node.getDownlinkClassC(downlink, &len, &event);
-
-        if (state > 0 && len > 0) {
-            Serial1.print(F("[C] Downlink: "));
-            for (size_t i = 0; i < len; i++) {
-                Serial1.print((char)downlink[i]);
-            }
-            Serial1.println();
+    // เช็คค่า dl > 0 ตามโค้ดต้นแบบที่คุณหามา (ถูกต้องที่สุด)
+    if (dl > 0 && len > 0) {
+        Serial1.println(F("\n===== DOWNLINK RECEIVED ====="));
+        Serial1.print(F("From Window: ")); Serial1.println(dl);
+        
+        Serial1.print(F("HEX: "));
+        for (size_t i = 0; i < len; i++) {
+            if (buf[i] < 0x10) Serial1.print('0');
+            Serial1.print(buf[i], HEX); Serial1.print(" ");
         }
+        Serial1.println();
+
+        Serial1.print(F("TEXT: "));
+        for (size_t i = 0; i < len; i++) {
+            if (isprint(buf[i])) Serial1.print((char)buf[i]);
+            else Serial1.print('.');
+        }
+        Serial1.println();
+        Serial1.println(F("============================"));
     }
 }
 
 // ===== END =====
 void LoRaWan::end() {
     SPI.end();
-    digitalWrite(LORA_SS_PIN, HIGH);       
+    digitalWrite(LORA_SS_PIN, HIGH);
     Serial1.println(F("LoRa SPI Closed"));
 }
