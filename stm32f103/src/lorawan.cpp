@@ -118,7 +118,8 @@ void LoRaWan::begin() {
         state = node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
         state = node.activateOTAA();
         
-        while (state != RADIOLIB_LORAWAN_NEW_SESSION && state != -1108) {
+        // 🚨 แก้ไข: วนลูปจนกว่าจะสำเร็จจริงๆ (คือ NEW_SESSION หรือ ERR_NONE)
+        while (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_ERR_NONE) {
             Serial1.print(F("Join fail (OTAA), code: "));
             Serial1.println(state);
             Serial1.println(F("Retrying in 20 seconds..."));
@@ -126,6 +127,8 @@ void LoRaWan::begin() {
             delay(20000); 
             
             Serial1.println(F("Re-Joining via OTAA..."));
+            // 🚨 ต้องสั่ง beginOTAA ใหม่ทุกรอบ ป้องกัน State ค้าง
+            node.beginOTAA(joinEUI, devEUI, nwkKey, appKey);
             state = node.activateOTAA(); 
         }
         Serial1.println(F("Joined OTAA successfully"));
@@ -314,50 +317,69 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 
-    // ================= UPLINK (สำหรับทั้ง Class A และ C) =================
+    // ================= UPLINK (ทำทั้ง Class A และ C) =================
     if (millis() - lastSend >= uplinkIntervalMs) {
         lastSend = millis();
 
         Serial1.println(F("\n===== UPLINK ====="));
         Serial1.print(F("Payload: "));
         Serial1.println(payload);
-        Serial1.print(F("FPort: ")); Serial1.println(currentFPort);
-        Serial1.print(uplinkIntervalMs); Serial1.println(F(" ms interval"));
 
+        // 🚨 1. เตรียม Buffer ถาดรองรับข้อความสำหรับ Class A
         uint8_t rxBuffer[255];
         size_t rxLen = 0;
 
+        // 🚨 2. ส่ง Uplink พร้อมแนบถาดรองไปดักจับ Downlink (RX1/RX2)
         int16_t state = node.sendReceive(
             (uint8_t*)payload,
             strlen(payload),
             currentFPort,
+            rxBuffer,  // <--- ใส่ถาดรองข้อความ
+            &rxLen,    // <--- ใส่ตัวแปรเก็บขนาดข้อความ
             currentAck
         );
 
         if (state >= RADIOLIB_ERR_NONE) {
             Serial1.print(F("[UPLINK] Success! "));
+            
             if (state == 0) {
                 Serial1.println(F("(No Downlink)"));
             } 
             else if (state == 1 || state == 2) {
                 Serial1.print(F("(Downlink in RX")); Serial1.print(state); Serial1.println(F(")"));
                 
+                // === โชว์ข้อความที่รับได้จาก Class A ===
+                if (rxLen > 0) {
+                    Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS A) ====="));
+                    Serial1.print(F("HEX: "));
+                    for (size_t i = 0; i < rxLen; i++) {
+                        if (rxBuffer[i] < 0x10) Serial1.print('0');
+                        Serial1.print(rxBuffer[i], HEX); Serial1.print(" ");
+                    }
+                    Serial1.println();
 
-            }
-            else if (state == 3) {
-                Serial1.println(F("(Downlink in RXC)"));
+                    Serial1.print(F("TEXT: "));
+                    for (size_t i = 0; i < rxLen; i++) {
+                        if (isprint(rxBuffer[i])) Serial1.print((char)rxBuffer[i]);
+                        else Serial1.print('.');
+                    }
+                    Serial1.println();
+                    Serial1.println(F("======================================="));
+                } else {
+                    Serial1.println(F("-> (Network MAC Command / No Text)"));
+                }
             }
         } 
         else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
-            Serial1.println(F("[UPLINK] NO ACK (Confirmed Uplink Failed)"));
+            Serial1.println(F("[UPLINK] NO ACK"));
         }
         else {
-            Serial1.print(F("[UPLINK] ACTUAL ERROR: "));
+            Serial1.print(F("[UPLINK] ERROR CODE: "));
             Serial1.println(state);
         }
     }
 
-    // ================= CLASS C DOWNLINK =================
+    // ================= CLASS C DOWNLINK (ห้ามทำเด็ดขาดถ้าเป็น Class A) =================
     if (currentMode == CLASS_C) {
         uint8_t buf[255];
         size_t len = 0;
@@ -365,7 +387,6 @@ void LoRaWan::loop(const char* payload) {
 
         if (dl > 0 && len > 0) {
             Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS C) ====="));
-            Serial1.print(F("From Window: ")); Serial1.println(dl);
             
             Serial1.print(F("HEX: "));
             for (size_t i = 0; i < len; i++) {
