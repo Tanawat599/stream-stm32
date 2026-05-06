@@ -27,27 +27,9 @@ LowSideSwitch::LowSideSwitch()
     memset(&conf, 0, sizeof(conf));
 }
 
-bool LowSideSwitch::loadConfig(SDResourceManager& sd, const char* path)
+bool LowSideSwitch::loadConfig(const JsonObject& sw)
 {
-    String json = sd.readFile(path);
-    if (json == "ERROR_OPEN" || json.length() == 0) {
-        Serial1.println(F("LS_SW: open config failed"));
-        return false;
-    }
 
-    DynamicJsonDocument doc(1024);
-    DeserializationError err = deserializeJson(doc, json);
-    if (err) {
-        Serial1.println(F("LS_SW: JSON parse error"));
-        return false;
-    }
-
-    if (!doc["hardware"]["ls_sw"].is<JsonObject>()) {
-        Serial1.println(F("LS_SW: missing hardware.ls_sw"));
-        return false;
-    }
-
-    JsonObject sw = doc["hardware"]["ls_sw"];
 
     conf.ENABLE = sw["enable"] | false;
     conf.INVERTED = sw["inverted"] | false;

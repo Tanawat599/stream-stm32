@@ -49,67 +49,103 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
     uint8_t TARGET_IDX = 0;
     bool FOUND = false;
 
+    // 1. ค้นหา Channel จาก ID
     for (uint8_t I = 0; I < CH_COUNT; I++) {
-        if (CH_LIST[I].CH_ID == ID) { TARGET = CH_LIST[I]; TARGET_IDX = I; FOUND = true; break; }
+        if (CH_LIST[I].CH_ID == ID) { 
+            TARGET = CH_LIST[I]; 
+            TARGET_IDX = I; 
+            FOUND = true; 
+            break; 
+        }
     }
     if (!FOUND) return false;
 
+    // 2. สร้าง Request Frame (คำสั่งขออ่านข้อมูล)
     uint8_t REQ[8];
-    REQ[0] = TARGET.SLAVE; REQ[1] = TARGET.TYPE; REQ[2] = TARGET.ADDR >> 8;
-    REQ[3] = TARGET.ADDR & 0xFF; REQ[4] = TARGET.QTY >> 8; REQ[5] = TARGET.QTY & 0xFF;
+    REQ[0] = TARGET.SLAVE; 
+    REQ[1] = TARGET.TYPE; 
+    REQ[2] = TARGET.ADDR >> 8;
+    REQ[3] = TARGET.ADDR & 0xFF; 
+    REQ[4] = TARGET.QTY >> 8; 
+    REQ[5] = TARGET.QTY & 0xFF;
 
     uint16_t calc_crc = CALC_CRC16(REQ, 6);
-    REQ[6] = calc_crc & 0xFF; REQ[7] = calc_crc >> 8;
+    REQ[6] = calc_crc & 0xFF; 
+    REQ[7] = calc_crc >> 8;
 
     uint8_t RETRY = 0;
     bool SUCCESS = false;
 
+    // คำนวณความยาวแพ็กเกจที่คาดหวังจาก Slave 
+    // โครงสร้าง: [SlaveID] [FC] [ByteCount] [Data...] [CRC_L] [CRC_H]
+    // สำหรับ Register (Type 3, 4) จำนวนไบต์ข้อมูล = QTY * 2
+    uint8_t EXPECTED_LEN = 3 + (TARGET.QTY * 2) + 2; 
+
+    // 3. เริ่มกระบวนการส่งและรอรับ
     while (RETRY < CFG.MAX_RETRY && !SUCCESS) {
+        
+        // เคลียร์ Buffer ขยะที่อาจค้างอยู่ก่อนส่งใหม่
         while (_SERIAL->available()) _SERIAL->read();
 
+        // สลับเป็นโหมดส่งข้อมูล (TX)
         TX_EN();
         _SERIAL->write(REQ, 8);
-        _SERIAL->flush();
+        _SERIAL->flush(); // รอข้อมูลย้ายลง Shift Register ของบอร์ด
+        
+        // *** จุดสำคัญ: ให้เวลาบิตสุดท้ายเดินทางออกไปจนพ้นสาย ก่อนสลับเป็นโหมดรับ ***
+        delay(2); 
+        
+        // สลับเป็นโหมดรับข้อมูล (RX) ทันที
         RX_EN();
 
         uint32_t START = millis();
-        Serial1.print("Master: Waiting for Slave... ");
+        Serial1.printf("MODBUS [ID:%d]: Wait %d bytes... ", TARGET.SLAVE, EXPECTED_LEN);
         
         while (millis() - START < CFG.MAX_RESP) {
-            if (_SERIAL->available() >= 5) {
-                delay(20);
-                uint8_t RESP_LEN = _SERIAL->available();
+            
+            // ตรวจสอบว่าข้อมูลเข้ามา "ครบตามจำนวนไบต์ที่ต้องการ" หรือยัง
+            if (_SERIAL->available() >= EXPECTED_LEN) {
+                
                 uint8_t RESP[64];
-                _SERIAL->readBytes(RESP, RESP_LEN);
+                _SERIAL->readBytes(RESP, EXPECTED_LEN);
 
-                Serial1.print("Got ");
-                Serial1.print(RESP_LEN);
-                Serial1.print(" bytes -> ");
-                for(int i=0; i<RESP_LEN; i++) {
+                Serial1.print("Got -> ");
+                for(int i = 0; i < EXPECTED_LEN; i++) {
                     Serial1.print(RESP[i], HEX); Serial1.print(" ");
                 }
                 Serial1.println();
 
-                uint16_t RECV_CRC = (uint16_t)RESP[RESP_LEN - 2] | ((uint16_t)RESP[RESP_LEN - 1] << 8);
-                uint16_t COMP_CRC = CALC_CRC16(RESP, RESP_LEN - 2);
+                // ตรวจสอบความถูกต้อง (CRC)
+                uint16_t RECV_CRC = (uint16_t)RESP[EXPECTED_LEN - 2] | ((uint16_t)RESP[EXPECTED_LEN - 1] << 8);
+                uint16_t COMP_CRC = CALC_CRC16(RESP, EXPECTED_LEN - 2);
 
                 if (RESP[0] == TARGET.SLAVE && RECV_CRC == COMP_CRC) {
-                    Serial1.println("CRC MATCH! Data Valid.");
+                    Serial1.println("MODBUS: CRC MATCH! Data Valid.");
+                    
                     uint8_t BYTE_COUNT = RESP[2];
                     uint8_t* PAYLOAD = &RESP[3];
+                    
+                    // แปลง Data ตาม Byte Order แล้วเก็บเข้า Memory
                     CH_DATA[TARGET_IDX] = APPLY_BYTE_ORDER(PAYLOAD, BYTE_COUNT, TARGET.ORDER);
                     SUCCESS = true;
                 } else {
-                    Serial1.println("FAILED: CRC or ID Mismatch!");
+                    Serial1.println("MODBUS: FAILED! CRC or ID Mismatch.");
                 }
-                break;
+                
+                // ออกจากลูปการรอรับข้อมูล (เพราะข้อมูลมาครบแล้ว ไม่ว่าจะถูกหรือผิด)
+                break; 
             }
         }
+
+        // กรณีไม่สำเร็จ (หมดเวลา หรือ CRC ผิด)
         if (!SUCCESS) {
-            Serial1.println("TIMEOUT: No response from Slave.");
+            Serial1.println("MODBUS: TIMEOUT or Error. Retrying...");
             RETRY++;
+            if (RETRY < CFG.MAX_RETRY) delay(200); // พักวงจรก่อน Retry
         }
     }
+    
+    // หน่วงเวลาก่อนเริ่มคำสั่งถัดไป ตามที่ตั้งใน Config
     delay(CFG.INTERVAL);
     return SUCCESS;
 }
@@ -180,28 +216,9 @@ uint32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
     if (index >= CH_COUNT) return 0;
     return CH_DATA[index];
 }
-bool MODBUS_RS485::loadConfig(SDResourceManager& sd, const char* path) {
-    String json = sd.readFile(path);
-    if (json == "ERROR_OPEN" || json.length() == 0) {
-        Serial1.print(F("MODBUS: failed to open config "));
-        Serial1.println(path);
-        return false; 
-    }
+bool MODBUS_RS485::loadConfig(const JsonObject& rs485) {
 
-    DynamicJsonDocument doc(4096);
-    DeserializationError err = deserializeJson(doc, json);
-    if (err) {
-        Serial1.print(F("MODBUS: JSON parse failed - "));
-        Serial1.println(err.c_str());
-        return false;
-    }
-
-    if (!doc["hardware"]["modbus_rs485"].is<JsonObject>()) {
-        Serial1.println(F("MODBUS ERROR: หาคำว่า 'hardware' หรือ 'modbus_rs485' ในไฟล์ JSON ไม่เจอ!"));
-        return false; 
-    }
     
-    JsonObject rs485 = doc["hardware"]["modbus_rs485"];
 
     RS485_CONF conf;
     conf.ENABLE    = rs485["enable"] | false;

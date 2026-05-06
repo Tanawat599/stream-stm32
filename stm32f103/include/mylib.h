@@ -36,7 +36,7 @@ class LoRaWan {
 public:
   void begin();
   void loop(const char* payload);
-  void loadConfig(class SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
+  void loadConfig(const JsonObject& lora);
   void setMode(LoRaClassMode mode);  
   void classC();
   void classA();
@@ -151,7 +151,7 @@ struct I2C_Device {
 
 class I2C {
 public:
-    void loadConfig(SDResourceManager& sd, const char* path);
+    void loadConfig(const JsonObject& i2c);
     void master_begin();
     const char* master_loop();
     void slave_begin(uint8_t address);
@@ -329,7 +329,7 @@ public:
     uint8_t GET_CH_COUNT();
     MODBUS_CH* GET_CH(uint8_t index);
     uint32_t GET_DATA_BY_INDEX(uint8_t index);
-    bool loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
+    bool loadConfig(const JsonObject& rs485);
 
 private:
     HardwareSerial* _SERIAL; 
@@ -369,7 +369,7 @@ private:
 public:
     LowSideSwitch();
 
-    bool loadConfig(SDResourceManager& sd, const char* path);
+    bool loadConfig(const JsonObject& sw);
     void begin();
 
     void on();

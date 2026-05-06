@@ -26,166 +26,142 @@ Wire.begin();
     Serial1.print(_frequency);
     Serial1.println(F(" Hz"));
 }
+void I2C::loadConfig(const JsonObject& i2c) {
+    Serial1.println(F("\n[I2C] Loading Config..."));
 
-void I2C::loadConfig(SDResourceManager& sd, const char* path) {
-    Serial1.println(F("I2C: Loading Config..."));
-    Serial1.flush();
-
-    File file = SD.open(path);
-    if (!file) {
-        Serial1.println(F("I2C: ERROR - Failed to open file!"));
-        return;
-    }
-
-    size_t fileSize = file.size();
-    Serial1.printf("I2C: File opened. Size: %d bytes\n", fileSize);
-    Serial1.flush();
-
-    if (fileSize == 0 || fileSize > 4096) {
-        Serial1.println(F("I2C: ERROR - File is empty or too large!"));
-        file.close();
-        return;
-    }
-
-    char* buffer = (char*)malloc(fileSize + 1);
-    if (!buffer) {
-        Serial1.println(F("I2C: ERROR - Out of RAM!"));
-        file.close();
-        return;
-    }
-
-    file.read((uint8_t*)buffer, fileSize);
-    buffer[fileSize] = '\0';
-    file.close();
-
-    Serial1.println(F("I2C: File read to RAM. Parsing JSON..."));
-    Serial1.flush();
-
-    JsonDocument doc; 
-    DeserializationError err = deserializeJson(doc, buffer);
-    
-
-    if (err) {
-        Serial1.print(F("I2C: JSON Parse Failed! Error: "));
-        Serial1.println(err.c_str());
-        free(buffer); 
-        return;
-    }
-
-    Serial1.println(F("I2C: JSON Parsed Successfully. Extracting data..."));
-    Serial1.flush();
-
-    JsonObject hardware = doc["hardware"];
-    if (hardware.isNull()) {
-        Serial1.println(F("I2C: Cannot find 'hardware' key in JSON!"));
-        free(buffer);
-        return;
-    }
-
-    JsonObject i2c = hardware["i2c"];
+    // ===== VALIDATE =====
     if (i2c.isNull()) {
-        Serial1.println(F("I2C: Cannot find 'i2c' key inside 'hardware'!"));
-        free(buffer);
+        Serial1.println(F("[I2C] ERROR: Config is NULL"));
+        _enabled = false;
         return;
     }
 
-    _enabled = i2c["enable"] | false;
-    _frequency = i2c["frequency"] | 100000;
+    // ===== BASIC CONFIG =====
+    _enabled     = i2c["enable"] | false;
+    _frequency   = i2c["frequency"] | 100000;
     _interval_ms = i2c["interval_ms"] | 2000;
-    _max_retry = i2c["max_retry"] | 3;
-    
+    _max_retry   = i2c["max_retry"] | 3;
 
+    Serial1.printf("[I2C] Enabled: %d, Freq: %lu, Interval: %lu, Retry: %d\n",
+                   _enabled, _frequency, _interval_ms, _max_retry);
+
+    // ===== CLEAR OLD DATA =====
     _devices.clear();
+
+    if (!_enabled) {
+        Serial1.println(F("[I2C] Disabled. Skip device loading."));
+        return;
+    }
+
+    // ===== DEVICES =====
     JsonArray devices = i2c["devices"];
+    if (devices.isNull()) {
+        Serial1.println(F("[I2C] No devices found"));
+        return;
+    }
+
     for (JsonObject dev : devices) {
         I2C_Device d;
-        d.name = dev["name"].as<String>();
-        
-        if (!dev["address"].isNull()) {
-            d.address = parseHex(dev["address"].as<const char*>());
+
+        // ---- NAME ----
+        d.name = dev["name"] | "unknown";
+
+        // ---- ADDRESS ----
+        if (dev["address"].is<const char*>()) {
+            d.address = parseHex(dev["address"]);   // "0x40"
+        } else {
+            d.address = dev["address"] | 0;
         }
 
+        // ---- CHANNELS ----
         JsonArray channels = dev["channels"];
+        if (channels.isNull()) continue;
+
         for (JsonObject ch : channels) {
             I2C_Channel c;
-            c.name = ch["name"].as<String>();
-            if (!ch["register"].isNull()) {
-                c.reg = parseHex(ch["register"].as<const char*>());
+
+            c.name = ch["name"] | "ch";
+
+            // register
+            if (ch["register"].is<const char*>()) {
+                c.reg = parseHex(ch["register"]);
+            } else {
+                c.reg = ch["register"] | 0;
             }
-            c.length = ch["length"];
-            c.byte_order = ch["byte_order"].as<String>();
-            c.scale = ch["scale"] | 1.0;
+
+            c.length     = ch["length"] | 2;
+            c.byte_order = ch["byte_order"] | "AB";
+            c.scale      = ch["scale"] | 1.0;
+
             d.channels.push_back(c);
         }
+
         _devices.push_back(d);
     }
 
-    char logBuf[128];
-    snprintf(logBuf, sizeof(logBuf), "I2C Config Loaded -> EN:%d, Freq:%lu, Int:%lu, Retry:%d, Devs:%d",
-             _enabled, _frequency, _interval_ms, _max_retry, _devices.size());
-             
-    Serial1.println(logBuf);
-    
-    if (_enabled && !_devices.empty()) {
-        for (const auto& dev : _devices) {
-            Serial1.printf(" - Device: %s [0x%02X] (%d channels)\n", dev.name.c_str(), dev.address, dev.channels.size());
-            for (const auto& ch : dev.channels) {
-                // uint8_t raw[4] = {0, 0, 0, 0};
-                // if (readRegister(dev.address, ch.reg, raw, ch.length)) {
-                //     uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
-                //     float finalVal = (float)rawVal * ch.scale;
-                //     Serial1.printf("    > CH: %s [Reg:0x%02X, Len:%d, Order:%s, Scale:%.2f] -> Sample Val: %.2f\n", 
-                //                    ch.name.c_str(), ch.reg, ch.length, ch.byte_order.c_str(), ch.scale, finalVal);
-                // } else {
-                //     Serial1.printf("    > CH: %s [Reg:0x%02X] - READ FAILED!\n", 
-                //                    ch.name.c_str(), ch.reg);
-                // }
-                Serial1.printf("    > CH: %s [Reg:0x%02X, Len:%d, Order:%s, Scale:%.2f]\n", 
-                               ch.name.c_str(), ch.reg, ch.length, ch.byte_order.c_str(), ch.scale);
+    // ===== DEBUG PRINT =====
+    Serial1.printf("[I2C] Devices Loaded: %d\n", _devices.size());
 
-            }
+    for (const auto& dev : _devices) {
+        Serial1.printf("  - %s [0x%02X] (%d channels)\n",
+                       dev.name.c_str(),
+                       dev.address,
+                       dev.channels.size());
+
+        for (const auto& ch : dev.channels) {
+            Serial1.printf("      > %s | Reg:0x%02X | Len:%d | Order:%s | Scale:%.2f\n",
+                           ch.name.c_str(),
+                           ch.reg,
+                           ch.length,
+                           ch.byte_order.c_str(),
+                           ch.scale);
         }
     }
 
-    free(buffer); 
-    Serial1.println(F("I2C: Initialization Complete!"));
+    Serial1.println(F("[I2C] Config Load Complete!\n"));
 }
 
 const char* I2C::master_loop() {
     static char payload[256];
+    memset(payload, 0, sizeof(payload));
     int len = 0;
-    if (!_enabled || _devices.empty()) {
-        payload[0] = '\0';   
-        return payload;
+
+    if (!_enabled || _devices.empty()) return "";
+
+    if (millis() - _lastPoll < _interval_ms) {
+        return ""; 
     }
-    
-    if (millis() - _lastPoll >= _interval_ms) {
-        _lastPoll = millis();
 
-        for (auto& dev : _devices) {
-            len += snprintf(payload + len, sizeof(payload) - len,
-                            ">>> %s [0x%X]\n", dev.name, dev.address);
+    _lastPoll = millis();
 
-            for (auto& ch : dev.channels) {
-                uint8_t raw[4] = {0}; 
+    for (auto& dev : _devices) {
+        int w = snprintf(payload + len, sizeof(payload) - len,
+                         ">>> %s [0x%02X]\n", dev.name.c_str(), dev.address);
+        
+        if (w < 0 || w >= (sizeof(payload) - len)) break;
+        len += w;
+
+        for (auto& ch : dev.channels) {
+            uint8_t raw[4] = {0};
+            if (readRegister(dev.address, ch.reg, raw, ch.length)) {
+                uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
+                float val = rawVal * ch.scale;
                 
-                if (readRegister(dev.address, ch.reg, raw, ch.length)) {
-                    uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
-                    float finalVal = (float)rawVal * ch.scale;
+                char valStr[16];
+                dtostrf(val, 6, 2, valStr);
 
-                    len += snprintf(payload + len, sizeof(payload) - len,
-                                    " - %s: %.2f\n", ch.name, finalVal);
-                } else {
-                    len += snprintf(payload + len, sizeof(payload) - len,
-                                    " - %s: FAIL\n", ch.name);
-                }
-                if (len >= sizeof(payload)) {
-                    payload[sizeof(payload) - 1] = '\0';
-                    return payload;
-                }
+                w = snprintf(payload + len, sizeof(payload) - len,
+                             " - %s: %s\n", ch.name.c_str(), valStr);
+            } else {
+                w = snprintf(payload + len, sizeof(payload) - len,
+                             " - %s: FAIL\n", ch.name.c_str());
             }
+
+            if (w < 0 || w >= (sizeof(payload) - len)) break;
+            len += w;
         }
     }
+
     return payload;
 }
 
@@ -247,7 +223,7 @@ uint32_t I2C::processRawData(uint8_t* data, uint8_t len, String order) {
 
 uint8_t I2C::parseHex(const char* str) {
     if (!str) return 0;
-    return (uint8_t)strtol(str, NULL, 16);
+    return (uint8_t)strtol(str, NULL, 0);
 }
 
 // ==========================================

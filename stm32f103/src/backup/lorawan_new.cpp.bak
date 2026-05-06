@@ -1,3 +1,4 @@
+
 #include <Arduino.h>
 #include "mylib.h"
 #include "config.h"
@@ -6,7 +7,8 @@
 // Objects
 SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
 Logger logger(&sd);
-c
+LoRaWan lorawan;
+
 
 void setup() {
     Serial1.begin(SERIAL_BAUD);
@@ -26,7 +28,7 @@ void setup() {
 
     if (sd.begin()) {
         logger.logMsg("SYSTEM", "SD initialized");
-        sd.listFiles(Serial1);
+        sd.listFiles(Srial1);
         const char* name = sd.getConfig();
         lorawan.loadConfig(sd, name);
         Serial1.println("SD Config Loaded.");

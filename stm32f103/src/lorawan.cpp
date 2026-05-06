@@ -162,154 +162,96 @@ void LoRaWan::begin() {
 }
 
 // ===== CONFIG =====
-void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
-    String json = sd.readFile(path);
-    if (json == "ERROR_OPEN") {
-        Serial1.print(F("LoRa: failed to open config "));
-        Serial1.println(path);
+void LoRaWan::loadConfig(const JsonObject& lora) {
+    Serial1.println(F("\n[LoRa] Loading Config..."));
+
+    if (lora.isNull()) {
+        Serial1.println(F("[LoRa] ERROR: Config is NULL"));
         return;
     }
 
-    StaticJsonDocument<2048> doc; 
-    DeserializationError err = deserializeJson(doc, json);
-    if (err) {
-        Serial1.print(F("LoRa: JSON parse failed: "));
-        Serial1.println(err.c_str());
+    JsonObject lorawan = lora["lorawan"];
+    if (lorawan.isNull()) {
+        Serial1.println(F("[LoRa] No 'lorawan' section"));
         return;
     }
 
-    JsonObject lora = doc["lora"].as<JsonObject>();
-    if (!lora.containsKey("lorawan")) return;
-    JsonObject lorawan = lora["lorawan"].as<JsonObject>();
-
-    if (lorawan.containsKey("mode")) {
-        const char* modeStr = lorawan["mode"];
-        if (strcmp(modeStr, "ABP") == 0) {
-            currentActivation = MODE_ABP;
-            Serial1.println(F("LoRa: Mode set to ABP"));
-        } else {
-            currentActivation = MODE_OTAA;
-            Serial1.println(F("LoRa: Mode set to OTAA"));
-        }
+    // ===== MODE =====
+    const char* modeStr = lorawan["mode"] | "OTAA";
+    if (strcmp(modeStr, "ABP") == 0) {
+        currentActivation = MODE_ABP;
+    } else {
+        currentActivation = MODE_OTAA;
     }
-    if (lorawan.containsKey("fport")) {
-        currentFPort = lorawan["fport"];
-        Serial1.print(F("LoRa: FPort set: ")); Serial1.println(currentFPort);
-    }
+    Serial1.printf("[LoRa] Mode: %s\n", modeStr);
 
-    if (lorawan.containsKey("tx")) {
-        JsonObject tx = lorawan["tx"].as<JsonObject>();
-        if (tx.containsKey("adr")) {
-            currentADR = tx["adr"]; 
-        }
-        if (tx.containsKey("sf")) {
-            currentSF = tx["sf"];   
-        }
-    }
+    // ===== FPORT =====
+    currentFPort = lorawan["fport"] | 2;
 
-    if (lorawan.containsKey("confirmed_uplink")) {
-        currentAck = lorawan["confirmed_uplink"];
-        Serial1.print(F("LoRa: Confirmed Uplink set: ")); Serial1.println(currentAck ? "ON" : "OFF");
-    }
+    // ===== CONFIRMED =====
+    currentAck = lorawan["confirmed_uplink"] | false;
 
-    if (lorawan.containsKey("otaa")) {
-        JsonObject otaa = lorawan["otaa"].as<JsonObject>();
-        if (otaa.containsKey("join_eui")) {
-            joinEUI = parseHexToUint64(otaa["join_eui"]);
-            Serial1.print(F("LoRa: joinEUI set: 0x")); printUint64Hex(joinEUI);
-        }
-        if (otaa.containsKey("dev_eui")) {
-            devEUI = parseHexToUint64(otaa["dev_eui"]);
-            Serial1.print(F("LoRa: devEUI set: 0x")); printUint64Hex(devEUI);
-        }
-        if (otaa.containsKey("app_key")) {
-            parseHexToBytes(otaa["app_key"], appKey, 16);
-            Serial1.println(F("LoRa: OTAA appKey set"));
-        }
-    }
+    // ===== TX =====
+    JsonObject tx = lorawan["tx"];
+    if (!tx.isNull()) {
+        currentADR = tx["adr"] | true;
+        currentSF  = tx["sf"]  | 7;
 
-    if (lorawan.containsKey("abp")) {
-        JsonObject abp = lorawan["abp"].as<JsonObject>();
-        if (abp.containsKey("dev_addr")) {
-            devAddr = parseHexToUint32(abp["dev_addr"]);
-            Serial1.print(F("LoRa: DevAddr set: 0x")); Serial1.println(devAddr, HEX);
-        }
-        if (abp.containsKey("nwk_skey")) {
-            parseHexToBytes(abp["nwk_skey"], nwkSEncKey, 16);
-            Serial1.println(F("LoRa: ABP NwkSKey set"));
-        }
-        if (abp.containsKey("app_skey")) {
-            parseHexToBytes(abp["app_skey"], appSKey, 16);
-            Serial1.println(F("LoRa: ABP AppSKey set"));
-        }
-    }
+        node.setADR(currentADR);
+        node.setDatarate(12 - currentSF);
 
-    if (lorawan.containsKey("class")) {
-        JsonObject cls = lorawan["class"].as<JsonObject>();
-        if (cls.containsKey("class_type")) {
-            const char* s = cls["class_type"];
-            if (strcmp(s, "A") == 0) {
-                setMode(CLASS_A);
-            } else if (strcmp(s, "C") == 0) {
-                setMode(CLASS_C);
-            }
-        }
-        if (lorawan.containsKey("uplink_interval_sec")) {
-
-            uplinkIntervalMs = lorawan["uplink_interval_sec"].as<unsigned long>() * 1000UL;
-            Serial1.print("uplinkIntervalMs :"); Serial1.println(uplinkIntervalMs);
-        
-        }
-    }
-
-    if (lorawan.containsKey("tx")) {
-        JsonObject tx = lorawan["tx"].as<JsonObject>();
-        if (tx.containsKey("adr")) {
-            bool adr = tx["adr"];
-            node.setADR(adr);
-            Serial1.print(F("LoRa: ADR set: ")); Serial1.println(adr ? "ON" : "OFF");
-        }
-        if (tx.containsKey("sf")) {
-            int sf = tx["sf"];
-            uint8_t dr = 12 - sf; 
-            node.setDatarate(dr);
-            Serial1.print(F("LoRa: SF set: ")); Serial1.println(sf);
-        }
         if (tx.containsKey("power")) {
-            int power = tx["power"];
-            node.setTxPower(power);
-            Serial1.print(F("LoRa: Tx Power set: ")); Serial1.println(power);
+            node.setTxPower(tx["power"]);
         }
     }
 
-    if (lorawan.containsKey("duty_cycle")) {
-        bool duty = lorawan["duty_cycle"];
-        node.setDutyCycle(duty);
-        Serial1.print(F("LoRa: Duty Cycle set: ")); Serial1.println(duty ? "ON" : "OFF");
-    }
-    if (lorawan.containsKey("rx2")) {
-        JsonObject rx2 = lorawan["rx2"].as<JsonObject>();
-        Serial1.println(F("LoRa: RX2 Config found"));
-        
-        if (rx2.containsKey("data_rate")) {
-            const char* rx2DR_str = rx2["data_rate"];
-            uint8_t dr_val = 2;
-            
-            if (strcmp(rx2DR_str, "DR0") == 0) dr_val = 0;
-            else if (strcmp(rx2DR_str, "DR1") == 0) dr_val = 1;
-            else if (strcmp(rx2DR_str, "DR2") == 0) dr_val = 2;
-            else if (strcmp(rx2DR_str, "DR3") == 0) dr_val = 3;
-            else if (strcmp(rx2DR_str, "DR4") == 0) dr_val = 4;
-            else if (strcmp(rx2DR_str, "DR5") == 0) dr_val = 5;
+    // ===== UPLINK INTERVAL =====
+    uplinkIntervalMs = (lorawan["uplink_interval_sec"] | 60) * 1000UL;
 
-            node.setRx2Dr(dr_val);
-            
-            Serial1.print(F("LoRa: RX2 Data Rate applied as DR"));
-            Serial1.println(dr_val);
-        }
+    // ===== OTAA =====
+    JsonObject otaa = lorawan["otaa"];
+    if (!otaa.isNull()) {
+        joinEUI = parseHexToUint64(otaa["join_eui"]);
+        devEUI  = parseHexToUint64(otaa["dev_eui"]);
+        parseHexToBytes(otaa["app_key"], appKey, 16);
     }
 
+    // ===== ABP =====
+    JsonObject abp = lorawan["abp"];
+    if (!abp.isNull()) {
+        devAddr = parseHexToUint32(abp["dev_addr"]);
+        parseHexToBytes(abp["nwk_skey"], nwkSEncKey, 16);
+        parseHexToBytes(abp["app_skey"], appSKey, 16);
+    }
 
+    // ===== CLASS =====
+    JsonObject cls = lorawan["class"];
+    if (!cls.isNull()) {
+        const char* type = cls["class_type"] | "A";
+        if (strcmp(type, "C") == 0) setMode(CLASS_C);
+        else setMode(CLASS_A);
+    }
+
+    // ===== DUTY =====
+    node.setDutyCycle(lorawan["duty_cycle"] | true);
+
+    // ===== RX2 =====
+    JsonObject rx2 = lorawan["rx2"];
+    if (!rx2.isNull()) {
+        const char* drStr = rx2["data_rate"] | "DR2";
+
+        uint8_t dr = 2;
+        if      (strcmp(drStr, "DR0") == 0) dr = 0;
+        else if (strcmp(drStr, "DR1") == 0) dr = 1;
+        else if (strcmp(drStr, "DR2") == 0) dr = 2;
+        else if (strcmp(drStr, "DR3") == 0) dr = 3;
+        else if (strcmp(drStr, "DR4") == 0) dr = 4;
+        else if (strcmp(drStr, "DR5") == 0) dr = 5;
+
+        node.setRx2Dr(dr);
+    }
+
+    Serial1.println(F("[LoRa] Config Loaded OK\n"));
 }
 
 // ===== LOOP =====
