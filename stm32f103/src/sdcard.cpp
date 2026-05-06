@@ -110,6 +110,55 @@ bool SDResourceManager::writeLog(const char* message) {
     return false;
 }
 
+void SDResourceManager::end() {
+    SPI.end();                       
+    digitalWrite(SD_CS, HIGH);       
+    delay(50);                       
+    Serial1.println(F("SD SPI Closed"));
+}
+
+bool SDResourceManager::checkHardwares(const char* path, const char* hardwareName) {
+
+    Serial1.print("Checking hardware: ");
+    Serial1.println(hardwareName);
+
+    String json = readFile(path);
+    if (json == "ERROR_OPEN" || json.length() == 0) {
+        Serial1.println(F("Config open failed"));
+        return false;
+    }
+
+    DynamicJsonDocument doc(2048);
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Serial1.println(F("JSON parse error"));
+        return false;
+    }
+
+    JsonObject hw = doc["hardware"];
+    if (!hw.containsKey(hardwareName)) {
+        Serial1.println(F("Hardware not found"));
+        return false;
+    }
+
+    JsonObject target = hw[hardwareName];
+
+    bool enabled = false;
+    if (target.containsKey("enable")) {
+        enabled = target["enable"];
+    } else if (target.containsKey("enabled")) {
+        enabled = target["enabled"];
+    } else {
+        Serial1.println(F("Missing enable field"));
+        return false;
+    }
+
+    Serial1.print("Status: ");
+    Serial1.println(enabled ? "ENABLED" : "DISABLED");
+
+    return enabled;
+}
+
 Logger::Logger(SDResourceManager* sd) {
     _sd = sd;
 }
@@ -167,9 +216,4 @@ void Logger::logMixed(const char* type, const char* message, int count, ...) {
     _sd->writeLog(buffer);
 }
 
-void SDResourceManager::end() {
-    SPI.end();                       
-    digitalWrite(SD_CS, HIGH);       
-    delay(50);                       
-    Serial1.println(F("SD SPI Closed"));
-}
+

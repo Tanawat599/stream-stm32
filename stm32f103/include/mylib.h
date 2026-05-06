@@ -41,9 +41,15 @@ public:
   void classC();
   void classA();
   void end();
+  bool available();
+  const char* getDownlink();
+  bool downlinkHandle();
+  
 
 private:
   LoRaClassMode currentMode = CLASS_C; 
+  char downlinkText[256];
+  bool hasNewDownlink = false;
 };
 class SDResourceManager {
 public:
@@ -57,6 +63,8 @@ public:
 
     String getLoRaKey() { return _loraKey; }
     int getSensorPin() { return _pin; }
+
+    bool checkHardwares(const char* path, const char* hardwareName);
 
     const char* getConfig();
 
@@ -145,7 +153,7 @@ class I2C {
 public:
     void loadConfig(SDResourceManager& sd, const char* path);
     void master_begin();
-    void master_loop();
+    const char* master_loop();
     void slave_begin(uint8_t address);
     void slave_loop();
 
@@ -248,33 +256,32 @@ private:
   uint32_t getSerialConfig();
 };
 
+
+// ================= ANALOG =================
 struct AnalogConfig {
-  uint8_t pin;
+  int pin;
+  float adcResolution;
+  float vref;
 
-  float vref;        
-  int adcResolution; 
+  float shuntResistor;
+  float minCurrent;
+  float maxCurrent;
 
-  float shuntResistor; 
+  float outMin;
+  float outMax;
 
-  float minCurrent; 
-  float maxCurrent; 
-
-  float outMin; 
-  float outMax; 
-
-  float multiplier; 
+  float multiplier;
 };
 
-// ================= CLASS =================
 class Analog420 {
 public:
   Analog420();
 
   void begin(AnalogConfig cfg);
 
-  float readCurrent();   // mA
-  float readVoltage();   // V
-  float readRaw();       // ADC
+  float readCurrent();
+  float readVoltage();
+  float readRaw();
   float readScaled();    
 
 private:
@@ -319,7 +326,9 @@ public:
     bool FETCH(uint8_t ID);
     void FETCH_ALL();
     uint32_t GET_DATA(uint8_t ID);
-
+    uint8_t GET_CH_COUNT();
+    MODBUS_CH* GET_CH(uint8_t index);
+    uint32_t GET_DATA_BY_INDEX(uint8_t index);
     bool loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
 
 private:

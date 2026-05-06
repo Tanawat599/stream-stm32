@@ -1,5 +1,7 @@
 #include "mylib.h"
 
+
+
 Analog420::Analog420() {}
 
 void Analog420::begin(AnalogConfig cfg) {
@@ -22,7 +24,6 @@ float Analog420::readVoltage() {
 float Analog420::readCurrent() {
   float voltage = readVoltage();
 
-  // I = V / R  → แปลงเป็น mA
   float current = (voltage / _cfg.shuntResistor) * 1000.0;
 
   return current;
@@ -32,16 +33,13 @@ float Analog420::readCurrent() {
 float Analog420::readScaled() {
   float current = readCurrent();
 
-  // clamp กันค่าเพี้ยน
   if (current < _cfg.minCurrent) current = _cfg.minCurrent;
   if (current > _cfg.maxCurrent) current = _cfg.maxCurrent;
 
-  // map 4–20mA → engineering value
   float ratio = (current - _cfg.minCurrent) / (_cfg.maxCurrent - _cfg.minCurrent);
 
   float value = _cfg.outMin + ratio * (_cfg.outMax - _cfg.outMin);
 
-  // apply multiplier
   value *= _cfg.multiplier;
 
   return value;

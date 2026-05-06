@@ -111,6 +111,7 @@ void LoRaWan::begin() {
         Serial1.println(state);
         while (true);
     }
+    pinMode(LED_PIN, OUTPUT);
 
     if (currentActivation == MODE_OTAA) {
         Serial1.println(F("Joining via OTAA..."));
@@ -234,7 +235,6 @@ void LoRaWan::loadConfig(SDResourceManager& sd, const char* path) {
             Serial1.print(F("LoRa: DevAddr set: 0x")); Serial1.println(devAddr, HEX);
         }
         if (abp.containsKey("nwk_skey")) {
-            // อ่านค่าใส่ nwkSEncKey ตรงๆ แล้วลบ memcpy ทิ้งเลยครับ
             parseHexToBytes(abp["nwk_skey"], nwkSEncKey, 16);
             Serial1.println(F("LoRa: ABP NwkSKey set"));
         }
@@ -391,16 +391,38 @@ void LoRaWan::loop(const char* payload) {
             Serial1.println();
 
             Serial1.print(F("TEXT: "));
+
+            size_t idx = 0;
+
             for (size_t i = 0; i < len; i++) {
-                if (isprint(buf[i])) Serial1.print((char)buf[i]);
-                else Serial1.print('.');
+                if (isprint(buf[i])) {
+                    char c = (char)buf[i];
+                    Serial1.print(c);
+
+                    if (idx < sizeof(downlinkText) - 1) {
+                        downlinkText[idx++] = c;
+                    }
+                } else {
+                    Serial1.print('.');
+                }
             }
+
+            downlinkText[idx] = '\0';  
+            hasNewDownlink = true;     
+
             Serial1.println();
             Serial1.println(F("============================"));
         }
     }
 }
+bool LoRaWan::available() {
+    return hasNewDownlink;
+}
 
+const char* LoRaWan::getDownlink() {
+    hasNewDownlink = false;
+    return downlinkText;
+}
 // ===== END =====
 void LoRaWan::end() {
     SPI.end();

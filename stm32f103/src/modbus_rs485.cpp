@@ -1,7 +1,5 @@
 #include "mylib.h"
 
-// อย่าลืม Include ไฟล์คลาส SD ของคุณด้วย
-// #include "SDResourceManager.h" 
 
 MODBUS_RS485::MODBUS_RS485(HardwareSerial* PORT, uint8_t DE_PIN, uint8_t RE_PIN) {
     _SERIAL = PORT;
@@ -122,7 +120,6 @@ void MODBUS_RS485::FETCH_ALL() {
     }
 }
 
-// เปลี่ยน Parameter จาก BYTE_ORDER เป็น MB_BYTE_ORDER
 uint32_t MODBUS_RS485::APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER) {
     uint32_t RESULT = 0;
 
@@ -171,6 +168,18 @@ void MODBUS_RS485::RX_EN() {
     digitalWrite(_RE_PIN, LOW); 
 }
 
+uint8_t MODBUS_RS485::GET_CH_COUNT() {
+    return CH_COUNT;
+}
+
+MODBUS_CH* MODBUS_RS485::GET_CH(uint8_t index) {
+    if (index >= CH_COUNT) return nullptr;
+    return &CH_LIST[index];
+}
+uint32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
+    if (index >= CH_COUNT) return 0;
+    return CH_DATA[index];
+}
 bool MODBUS_RS485::loadConfig(SDResourceManager& sd, const char* path) {
     String json = sd.readFile(path);
     if (json == "ERROR_OPEN" || json.length() == 0) {

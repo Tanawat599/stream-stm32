@@ -97,7 +97,6 @@
     },
     "ls_sw": {
       "enable": true,
-      "pin": "PB5",
       "inverted": false,
       "default_state": "off",
       "mode": "push_pull",
@@ -144,7 +143,7 @@
     },
     "region": "AS923",
     "lorawan": {
-      "mode": "OTAA",
+      "mode": "ABP",
       "otaa": {
         "join_eui": "E63BA610B2498DBE",
         "dev_eui": "C304DB83070E0063",
@@ -168,7 +167,7 @@
           "uplink_interval_min": 60
         }
       },
-      "uplink_interval_sec": 20,
+      "uplink_interval_sec": 15,
       "rx2": {
         "frequency": 923200000,
         "data_rate": "DR2"

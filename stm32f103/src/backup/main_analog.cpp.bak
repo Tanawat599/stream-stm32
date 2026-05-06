@@ -1,0 +1,49 @@
+#include <Arduino.h>
+#include "mylib.h"
+#include "config.h"
+
+SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
+LowSideSwitch ls;
+
+void setup() {
+    Serial.begin(115200);
+    Serial1.begin(115200);   
+
+    delay(1000);
+    Serial1.println("System Start");
+
+    // ===== SD INIT =====
+    if (!sd.begin()) {
+        Serial1.println("SD init failed");
+        while (1);
+    }
+    Serial1.println("SD init OK");
+    const char* name = sd.getConfig();
+    sd.listFiles(Serial1);
+    Serial1.print("Config file: ");
+    Serial1.println(name);
+    // ===== LOAD CONFIG =====
+    if (!ls.loadConfig(sd, name)) {
+        Serial1.println("LS_SW load config FAILED");
+        while (1);
+    }
+    Serial1.println("LS_SW config loaded");
+
+    // ===== INIT GPIO =====
+    ls.begin();
+    Serial1.println("LS_SW begin done");
+}
+
+void loop() {
+    Serial1.println("ON");
+    ls.on();
+    delay(2000);
+
+    Serial1.println("OFF");
+    ls.off();
+    delay(2000);
+
+    Serial1.println("TOGGLE");
+    ls.toggle();
+    delay(2000);
+}

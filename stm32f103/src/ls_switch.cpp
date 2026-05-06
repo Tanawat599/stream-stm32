@@ -8,6 +8,8 @@ static bool parsePin(const String& pinStr, GPIO_TypeDef*& port, uint16_t& pin)
     char portChar = pinStr[1];
     int pinNum = pinStr.substring(2).toInt();
 
+    if (pinNum < 0 || pinNum > 15) return false;  
+
     switch (portChar) {
         case 'A': port = GPIOA; break;
         case 'B': port = GPIOB; break;
@@ -15,7 +17,8 @@ static bool parsePin(const String& pinStr, GPIO_TypeDef*& port, uint16_t& pin)
         default: return false;
     }
 
-    pin = (1 << pinNum);
+    pin = (uint16_t)(1U << pinNum);  
+
     return true;
 }
 
@@ -28,23 +31,23 @@ bool LowSideSwitch::loadConfig(SDResourceManager& sd, const char* path)
 {
     String json = sd.readFile(path);
     if (json == "ERROR_OPEN" || json.length() == 0) {
-        Serial.println(F("LS_SW: open config failed"));
+        Serial1.println(F("LS_SW: open config failed"));
         return false;
     }
 
     DynamicJsonDocument doc(1024);
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
-        Serial.println(F("LS_SW: JSON parse error"));
+        Serial1.println(F("LS_SW: JSON parse error"));
         return false;
     }
 
-    if (!doc["ls_sw"].is<JsonObject>()) {
-        Serial.println(F("LS_SW: missing ls_sw"));
+    if (!doc["hardware"]["ls_sw"].is<JsonObject>()) {
+        Serial1.println(F("LS_SW: missing hardware.ls_sw"));
         return false;
     }
 
-    JsonObject sw = doc["ls_sw"];
+    JsonObject sw = doc["hardware"]["ls_sw"];
 
     conf.ENABLE = sw["enable"] | false;
     conf.INVERTED = sw["inverted"] | false;
@@ -57,7 +60,7 @@ bool LowSideSwitch::loadConfig(SDResourceManager& sd, const char* path)
     // pin
     String pinStr = sw["pin"] | "PB5";
     if (!parsePin(pinStr, conf.PORT, conf.PIN)) {
-        Serial.println(F("LS_SW: invalid pin"));
+        Serial1.println(F("LS_SW: invalid pin"));
         return false;
     }
 
@@ -77,7 +80,44 @@ bool LowSideSwitch::loadConfig(SDResourceManager& sd, const char* path)
     else if (speed == "medium") conf.SPEED = GPIO_SPEED_FREQ_MEDIUM;
     else conf.SPEED = GPIO_SPEED_FREQ_LOW;
 
-    Serial.println(F("LS_SW: Config Loaded"));
+    Serial1.println(F("LS_SW: Config Loaded"));
+    Serial1.println("==== LS_SW CONFIG ====");
+
+    Serial1.print("ENABLE: ");
+    Serial1.println(conf.ENABLE);
+
+    Serial1.print("INVERTED: ");
+    Serial1.println(conf.INVERTED);
+
+    Serial1.print("STARTUP_DELAY: ");
+    Serial1.println(conf.STARTUP_DELAY);
+
+    Serial1.print("DEFAULT_STATE: ");
+    Serial1.println(conf.DEFAULT_STATE == GPIO_PIN_SET ? "ON" : "OFF");
+
+    Serial1.print("PORT: ");
+    if (conf.PORT == GPIOA) Serial1.println("GPIOA");
+    else if (conf.PORT == GPIOB) Serial1.println("GPIOB");
+    else if (conf.PORT == GPIOC) Serial1.println("GPIOC");
+    else Serial1.println("UNKNOWN");
+
+    Serial1.print("PIN: ");
+    Serial1.println(conf.PIN);  
+
+    Serial1.print("MODE: ");
+    Serial1.println(conf.MODE == GPIO_MODE_OUTPUT_OD ? "OPEN_DRAIN" : "PUSH_PULL");
+
+    Serial1.print("PULL: ");
+    if (conf.PULL == GPIO_PULLUP) Serial1.println("PULLUP");
+    else if (conf.PULL == GPIO_PULLDOWN) Serial1.println("PULLDOWN");
+    else Serial1.println("NONE");
+
+    Serial1.print("SPEED: ");
+    if (conf.SPEED == GPIO_SPEED_FREQ_HIGH) Serial1.println("HIGH");
+    else if (conf.SPEED == GPIO_SPEED_FREQ_MEDIUM) Serial1.println("MEDIUM");
+    else Serial1.println("LOW");
+
+    Serial1.println("======================");
     return true;
 }
 
@@ -85,10 +125,9 @@ void LowSideSwitch::begin()
 {
     if (!conf.ENABLE) return;
 
-    // enable clock
-    if (conf.PORT == GPIOA) __HAL_RCC_GPIOA_CLK_ENABLE();
-    if (conf.PORT == GPIOB) __HAL_RCC_GPIOB_CLK_ENABLE();
-    if (conf.PORT == GPIOC) __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = conf.PIN;
@@ -98,7 +137,6 @@ void LowSideSwitch::begin()
 
     HAL_GPIO_Init(conf.PORT, &GPIO_InitStruct);
 
-    // default state
     HAL_GPIO_WritePin(conf.PORT, conf.PIN, conf.DEFAULT_STATE);
 
     if (conf.STARTUP_DELAY > 0) {

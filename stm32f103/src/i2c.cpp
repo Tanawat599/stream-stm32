@@ -151,18 +151,20 @@ void I2C::loadConfig(SDResourceManager& sd, const char* path) {
     Serial1.println(F("I2C: Initialization Complete!"));
 }
 
-void I2C::master_loop() {
-    if (!_enabled || _devices.empty()) return;
+const char* I2C::master_loop() {
+    static char payload[256];
+    int len = 0;
+    if (!_enabled || _devices.empty()) {
+        payload[0] = '\0';   
+        return payload;
+    }
     
     if (millis() - _lastPoll >= _interval_ms) {
         _lastPoll = millis();
 
         for (auto& dev : _devices) {
-            Serial1.print(F("\n>>> Polling Device: "));
-            Serial1.print(dev.name);
-            Serial1.print(F(" [0x"));
-            Serial1.print(dev.address, HEX);
-            Serial1.println(F("]"));
+            len += snprintf(payload + len, sizeof(payload) - len,
+                            ">>> %s [0x%X]\n", dev.name, dev.address);
 
             for (auto& ch : dev.channels) {
                 uint8_t raw[4] = {0}; 
@@ -170,19 +172,21 @@ void I2C::master_loop() {
                 if (readRegister(dev.address, ch.reg, raw, ch.length)) {
                     uint32_t rawVal = processRawData(raw, ch.length, ch.byte_order);
                     float finalVal = (float)rawVal * ch.scale;
-                    
-                    Serial1.print(F("    - "));
-                    Serial1.print(ch.name);
-                    Serial1.print(F(": "));
-                    Serial1.println(finalVal); 
+
+                    len += snprintf(payload + len, sizeof(payload) - len,
+                                    " - %s: %.2f\n", ch.name, finalVal);
                 } else {
-                    Serial1.print(F("    - "));
-                    Serial1.print(ch.name);
-                    Serial1.println(F(": READ FAILED!"));
+                    len += snprintf(payload + len, sizeof(payload) - len,
+                                    " - %s: FAIL\n", ch.name);
+                }
+                if (len >= sizeof(payload)) {
+                    payload[sizeof(payload) - 1] = '\0';
+                    return payload;
                 }
             }
         }
     }
+    return payload;
 }
 
 bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_t len) {

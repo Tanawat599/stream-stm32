@@ -6,7 +6,7 @@
 // Objects
 SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
 Logger logger(&sd);
-LoRaWan lorawan;
+c
 
 void setup() {
     Serial1.begin(SERIAL_BAUD);
