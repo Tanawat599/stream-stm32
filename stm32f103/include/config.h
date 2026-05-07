@@ -55,7 +55,23 @@
 // ===== LS Switch =====
 #define LS_SW_PIN PB5
 
+// ===== Button CONFIG =====
+#define BUTTON_PIN PC13
 
+// ===== Battery ADC CONFIG =====
+#define VBATT_PIN      PA1
+#define CURRENT_PIN    PA0
+
+#define CHRG_PIN       PB0
+#define DONE_PIN       PB1
+
+const float ADC_VREF = 3.3f;
+const int ADC_RES = 4095;
+
+
+const float VBATT_DIVIDER = 0.75f;
+
+const float SHUNT_RESISTOR = 150.0f;
 
 /* ===================== Serial Configuration ===================== */
 #define SERIAL_BAUD 115200

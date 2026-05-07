@@ -8,6 +8,7 @@
 #include <SD.h>
 #include <ArduinoJson.h>
 #include <vector>
+#include <Adafruit_SHTC3.h>
 
 
 
@@ -377,6 +378,31 @@ public:
     void off();
     void toggle();
 };
+class MySHTC3 {
 
+private:
+
+    TwoWire* _wire;
+
+    uint8_t _sda;
+    uint8_t _scl;
+
+    Adafruit_SHTC3 _shtc3;
+
+    float _temperature;
+    float _humidity;
+
+public:
+
+    MySHTC3(TwoWire* wire, uint8_t sda, uint8_t scl);
+
+    bool begin();
+
+    bool read();
+
+    float getTemperature();
+
+    float getHumidity();
+};
 
 #endif

@@ -1,311 +1,368 @@
-#include <Arduino.h>
-#include "mylib.h"
-#include "config.h"
-
-SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
-LowSideSwitch ls;
-Logger logger(&sd);
-LoRaWan lorawan;
-I2C i2cMaster;
-MODBUS_RS485 modbus_rs485(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
-OLED oled;
-
-
-bool i2cEnabled = false;
-bool ls_swEnabled = false;
-bool oledEnabled = false;
-bool ledEnabled = false;
-bool analogEnabled = false;
-bool modbus_rs485Enabled = false;
-
-String displayText = "";
-
-static char main_payload[256];
-const char* i2c_payload = nullptr;
-static char modbus_payload[128];
-
-const char* downlink_payload = nullptr;
-
-void setup() {
-    Serial1.begin(115200);   
-    delay(1000);
-    Serial1.println("System Start");
-
-    // ===== SD SPI =====
-    SPI.setSCLK(SD_SCK);
-    SPI.setMISO(SD_MISO);
-    SPI.setMOSI(SD_MOSI);
-    SPI.begin(); 
-
-    if (!sd.begin()) {
-        Serial1.println("SD init failed");
-        while (1);
-    }
-
-    const char* file_name = sd.getConfig();
-
-    File file = SD.open(file_name);
-    if (!file) {
-        Serial1.println("Open config failed");
-        while (1);
-    }
-
-    StaticJsonDocument<4096> doc;
-    auto err = deserializeJson(doc, file);
-    file.close();
-
-    if (err) {
-        Serial1.println(err.c_str());
-        
-        while (1);
-    }
-
-    Serial1.println("JSON Loaded OK");
-
-    JsonObject hw   = doc["hardware"];
-    JsonObject lora = doc["lora"];
-
-    // ===== FLAGS =====
-    i2cEnabled          = hw["i2c"]["enable"] | false;
-    modbus_rs485Enabled = hw["modbus_rs485"]["enable"] | false;
-    oledEnabled = hw["oled"]["enable"] | hw["oled"]["enabled"] | false;
-    ls_swEnabled = hw["ls_sw"]["enable"] | hw["ls_sw"]["enabled"] | false;
-    ledEnabled   = hw["led"]["enable"] | hw["led"]["enabled"] | false;
-    analogEnabled = hw["analog"]["enable"] | hw["analog"]["enabled"] | false;
-
-    // ===== INIT =====
-    if (i2cEnabled) {
-        i2cMaster.loadConfig(hw["i2c"]);
-        i2cMaster.master_begin();
-    }
-
-    if (modbus_rs485Enabled) {
-        modbus_rs485.loadConfig(hw["modbus_rs485"]);
-    }
-
-    if (ls_swEnabled) {
-        ls.loadConfig(hw["ls_sw"]);
-        ls.begin();
-    }
-
-    if (oledEnabled) {
-        oled.begin();
-        oled.clear();
-        oled.setFont(u8g2_font_5x7_tr);
-        oled.print("Booting...", 0, 10);
-        oled.update();
-    }
-
-    if (ledEnabled) {
-        pinMode(LED_PIN, OUTPUT);
-        digitalWrite(LED_PIN, LOW);
-    }
-
-    // if (analogEnabled) {
-    //     // Initialize analog components
-    // }
-
-    lorawan.loadConfig(lora);
-
-    // ===== SWITCH SPI =====
-    SPI.end();
-    digitalWrite(SD_CS, HIGH);
-    delay(100);
-
-    SPI.setSCLK(PA5);
-    SPI.setMISO(PA6);
-    SPI.setMOSI(PA7);
-    SPI.begin(); 
-    
-    lorawan.begin();
-
-    Serial1.println("System Ready");
-    delay(1000);
-}
-void loop() {
-    memset(main_payload, 0, sizeof(main_payload));
-    
-    // สร้าง JSON Document ขนาด 256 bytes (ปรับเพิ่มได้ถ้าข้อมูลเยอะ)
-    StaticJsonDocument<256> payloadDoc; 
-
-    // ===== I2C =====
-    if (i2cEnabled) {
-        displayText += " I2C ";
-        const char* p = i2cMaster.master_loop();
-        if (p && strlen(p) > 0) {
-            // สมมติว่า p เป็นค่าเดี่ยวๆ หรือ String
-            payloadDoc["i2c"] = p; 
-        }
-    }
-
-    // ===== MODBUS =====
-    if (modbus_rs485Enabled) {
-        displayText += " modbus ";
-        
-        // สร้าง Object ย่อยชื่อ "modbus"
-        JsonObject modbusData = payloadDoc.createNestedObject("modbus");
-
-        modbus_rs485.FETCH_ALL();
-        uint8_t count = modbus_rs485.GET_CH_COUNT();
-
-        for (uint8_t i = 0; i < count; i++) {
-            MODBUS_CH* ch = modbus_rs485.GET_CH(i);
-            if (!ch) continue;
-
-            uint32_t data = modbus_rs485.GET_DATA_BY_INDEX(i);
-
-            float value = (ch->QTY == 2)
-                ? *((float*)&data)
-                : (float)data;
-
-            // นำข้อมูลเข้า JSON โดยใช้ชื่อ Channel (ch->NAME) เป็น Key
-            // ฟังก์ชัน serialized(String(value, 2)) ช่วยบังคับให้แสดงทศนิยม 2 ตำแหน่ง
-            modbusData[ch->NAME] = serialized(String(value, 2));
-        }
-    }
-
-    // ===== แปลง JSON Object กลับเป็น String เพือส่งเข้า LoRa =====
-    serializeJson(payloadDoc, main_payload, sizeof(main_payload));
-
-    Serial1.print("PAYLOAD: ");
-    // ผลลัพธ์ที่ได้จะหน้าตาประมาณนี้: {"i2c":"data","modbus":{"Temp":25.50,"Hum":65.43}}
-    Serial1.println(main_payload);
-
-    lorawan.loop(main_payload);
-    if (lorawan.available()) {
-        downlink_payload = lorawan.getDownlink();
-        Serial1.print("DOWNLINK: ");
-        Serial1.println(downlink_payload);
-    }
-
-    oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
-    displayText = "";
-    delay(5000);
-}
-
-
 // #include <Arduino.h>
 // #include "mylib.h"
+// #include "config.h"
 
-// I2C i2cSlave;
+// SDResourceManager sd(SD_MOSI, SD_MISO, SD_SCK, SD_CS);
+// LowSideSwitch ls;
+// Logger logger(&sd);
+// LoRaWan lorawan;
+// I2C i2cMaster;
+// MODBUS_RS485 modbus_rs485(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
+// OLED oled;
 
-// const uint8_t SLAVE_ADDRESS = 0x40; 
 
-// void setup() {
-//     Serial1.begin(115200);
-//     delay(2000); 
+// bool i2cEnabled = false;
+// bool ls_swEnabled = false;
+// bool oledEnabled = false;
+// bool ledEnabled = false;
+// bool analogEnabled = false;
+// bool modbus_rs485Enabled = false;
 
-//     Serial1.println(F("\n============================="));
-//     Serial1.println(F("   I2C SLAVE SENSOR START  "));
-//     Serial1.println(F("============================="));
+// String displayText = "";
 
-//     i2cSlave.slave_begin(SLAVE_ADDRESS);
-    
-//     Serial1.print(F("Listening for Master on Address: 0x"));
-//     Serial1.println(SLAVE_ADDRESS, HEX);
+// static char main_payload[256];
+// const char* i2c_payload = nullptr;
+// static char modbus_payload[128];
+
+// const char* downlink_payload = nullptr;
+
+
+
+// float readBatteryVoltage() {
+
+//     int adc = analogRead(VBATT_PIN);
+
+//     float v_adc = (adc * ADC_VREF) / ADC_RES;
+
+//     float v_batt = v_adc / VBATT_DIVIDER;
+
+//     return v_batt;
 // }
 
-// void loop() {
-//     i2cSlave.slave_loop();
+// float readCurrent_mA() {
+
+//     int adc = analogRead(CURRENT_PIN);
+
+//     float voltage = (adc * ADC_VREF) / ADC_RES;
+
+//     // I = V/R
+//     float current_A = voltage / SHUNT_RESISTOR;
+
+//     float current_mA = current_A * 1000.0;
+
+//     return current_mA;
+// }
+
+// String getChargeStatus() {
+
+//     bool chrg = digitalRead(CHRG_PIN);
+//     bool done = digitalRead(DONE_PIN);
+
+//     // active low
+//     if (!chrg && done) {
+//         return "Charging";
+//     }
+
+//     if (chrg && !done) {
+//         return "Charge Full";
+//     }
+
+//     return "Idle";
+// }
+
+
+// void setup() {
+//     Serial1.begin(115200);   
+//     delay(1000);
+//     Serial1.println("System Start");
+//     // ===== Button Setup =====
+//     pinMode(BUTTON_PIN, INPUT);
+
+//     // ===== Battery ADC Setup =====
+//     pinMode(BUTTON_PIN, INPUT);
+
+//     pinMode(CHRG_PIN, INPUT_PULLUP);
+//     pinMode(DONE_PIN, INPUT_PULLUP);
+
+//     analogReadResolution(12);
+
+//     // ===== SD SPI =====
+//     SPI.setSCLK(SD_SCK);
+//     SPI.setMISO(SD_MISO);
+//     SPI.setMOSI(SD_MOSI);
+//     SPI.begin(); 
+
+//     if (!sd.begin()) {
+//         Serial1.println("SD init failed");
+//         while (1);
+//     }
+
+//     const char* file_name = sd.getConfig();
+
+//     File file = SD.open(file_name);
+//     if (!file) {
+//         Serial1.println("Open config failed");
+//         while (1);
+//     }
+
+//     StaticJsonDocument<4096> doc;
+//     auto err = deserializeJson(doc, file);
+//     file.close();
+
+//     if (err) {
+//         Serial1.println(err.c_str());
+        
+//         while (1);
+//     }
+
+//     Serial1.println("JSON Loaded OK");
+
+//     JsonObject hw   = doc["hardware"];
+//     JsonObject lora = doc["lora"];
+
+//     // ===== FLAGS =====
+//     i2cEnabled          = hw["i2c"]["enable"] | false;
+//     modbus_rs485Enabled = hw["modbus_rs485"]["enable"] | false;
+//     oledEnabled = hw["oled"]["enable"] | hw["oled"]["enabled"] | false;
+//     ls_swEnabled = hw["ls_sw"]["enable"] | hw["ls_sw"]["enabled"] | false;
+//     ledEnabled   = hw["led"]["enable"] | hw["led"]["enabled"] | false;
+//     analogEnabled = hw["analog"]["enable"] | hw["analog"]["enabled"] | false;
+
+//     // ===== INIT =====
+//     if (i2cEnabled) {
+//         i2cMaster.loadConfig(hw["i2c"]);
+//         i2cMaster.master_begin();
+//     }
+
+//     if (modbus_rs485Enabled) {
+//         modbus_rs485.loadConfig(hw["modbus_rs485"]);
+//     }
+
+//     if (ls_swEnabled) {
+//         ls.loadConfig(hw["ls_sw"]);
+//         ls.begin();
+//     }
+
+//     if (oledEnabled) {
+//         oled.begin();
+//         oled.clear();
+//         oled.setFont(u8g2_font_5x7_tr);
+//         oled.print("Booting...", 0, 10);
+//         oled.update();
+//     }
+
+//     if (ledEnabled) {
+//         pinMode(LED_PIN, OUTPUT);
+//         digitalWrite(LED_PIN, LOW);
+//     }
+
+//     // if (analogEnabled) {
+//     //     // Initialize analog components
+//     // }
+
+//     lorawan.loadConfig(lora);
+
+//     // ===== SWITCH SPI =====
+//     SPI.end();
+//     digitalWrite(SD_CS, HIGH);
+//     delay(100);
+
+//     SPI.setSCLK(PA5);
+//     SPI.setMISO(PA6);
+//     SPI.setMOSI(PA7);
+//     SPI.begin(); 
     
-//     delay(10);
+//     lorawan.begin();
+
+//     Serial1.println("System Ready");
+//     delay(1000);
+// }
+// void loop() {
+//     memset(main_payload, 0, sizeof(main_payload));
+    
+//     // สร้าง JSON Document ขนาด 256 bytes (ปรับเพิ่มได้ถ้าข้อมูลเยอะ)
+//     StaticJsonDocument<256> payloadDoc; 
+
+//     // ===== I2C =====
+//     if (i2cEnabled) {
+//         displayText += " I2C ";
+//         const char* p = i2cMaster.master_loop();
+//         if (p && strlen(p) > 0) {
+//             payloadDoc["i2c"] = p; 
+//         }
+//     }
+
+//     // ===== MODBUS =====
+//     if (modbus_rs485Enabled) {
+//         displayText += " modbus ";
+        
+//         JsonObject modbusData = payloadDoc.createNestedObject("modbus");
+
+//         modbus_rs485.FETCH_ALL();
+//         uint8_t count = modbus_rs485.GET_CH_COUNT();
+
+//         for (uint8_t i = 0; i < count; i++) {
+//             MODBUS_CH* ch = modbus_rs485.GET_CH(i);
+//             if (!ch) continue;
+
+//             uint32_t data = modbus_rs485.GET_DATA_BY_INDEX(i);
+
+//             float value = (ch->QTY == 2)
+//                 ? *((float*)&data)
+//                 : (float)data;
+
+//             modbusData[ch->NAME] = serialized(String(value, 2));
+//         }
+//     }
+//     // ===== BATTERY & CHARGING =====
+//     JsonObject batData = payloadDoc.createNestedObject("bat");
+//     batData["v"] = serialized(String(readBatteryVoltage(), 2));
+//     batData["mA"] = serialized(String(readCurrent_mA(), 1));
+//     batData["st"] = getChargeStatus();
+
+//     // แปลง JSON ลงตัวแปรเพื่อส่งผ่าน LoRa
+//     serializeJson(payloadDoc, main_payload, sizeof(main_payload));
+
+//     // Serial1.print("PAYLOAD: ");
+//     // Serial1.println(main_payload);
+
+//     lorawan.loop(main_payload);
+//     if (lorawan.available()) {
+//         const char* downlink_payload = lorawan.getDownlink();
+//         Serial1.print("DOWNLINK HEX: ");
+//         Serial1.println(downlink_payload);
+
+//         int len = strlen(downlink_payload);
+        
+//         if (downlink_payload != nullptr && len >= 2) {
+            
+//             char cmdStr[3] = {downlink_payload[0], downlink_payload[1], '\0'};
+//             uint8_t command = strtol(cmdStr, NULL, 16); 
+
+//             switch (command) {
+
+//                 case 0x01: {  
+//                     if (len >= 4 && ledEnabled) { 
+//                         char stateStr[3] = {downlink_payload[2], downlink_payload[3], '\0'};
+//                         uint8_t state = strtol(stateStr, NULL, 16);
+                        
+//                         digitalWrite(LED_PIN, state ? HIGH : LOW);
+//                         Serial1.print("ACTION: LED -> ");
+//                         Serial1.println(state ? "ON" : "OFF");
+//                     }
+//                     break;
+//                 }
+
+//                 case 0x02: {  
+//                     if (len >= 6 && ls_swEnabled) { 
+//                         char chStr[3] = {downlink_payload[2], downlink_payload[3], '\0'};
+//                         char stateStr[3] = {downlink_payload[4], downlink_payload[5], '\0'};
+                        
+//                         uint8_t channel = strtol(chStr, NULL, 16);
+//                         uint8_t state = strtol(stateStr, NULL, 16);
+                        
+//                         Serial1.print("ACTION: LS Switch CH:");
+//                         Serial1.print(channel);
+//                         Serial1.print(" -> ");
+//                         Serial1.println(state ? "ON" : "OFF");
+//                     }
+//                     break;
+//                 }
+
+//                 case 0x03: {  
+//                     if (len > 2 && oledEnabled) {
+//                         char textBuffer[32] = {0}; 
+//                         int textIdx = 0;
+
+//                         for (int i = 2; i < len && textIdx < 31; i += 2) {
+//                             char hexChar[3] = {downlink_payload[i], downlink_payload[i+1], '\0'};
+//                             textBuffer[textIdx++] = (char)strtol(hexChar, NULL, 16);
+//                         }
+                        
+//                         oled.clear();
+//                         oled.setFont(u8g2_font_5x7_tr); 
+//                         oled.print(textBuffer, 0, 10);
+//                         oled.update();
+
+//                         Serial1.print("ACTION: OLED Display -> ");
+//                         Serial1.println(textBuffer);
+//                     }
+//                     break;
+//                 }
+
+//                 default:
+//                     Serial1.print("UNKNOWN COMMAND: 0x");
+//                     Serial1.println(command, HEX);
+//                     break;
+//             }
+//         }
+//     }
+
+//     oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
+//     displayText = "";
+//     delay(1000);
 // }
 
 
 
 
 // #include <Arduino.h>
-
-// #define RS485_DE_PIN PB9
-// #define RS485_RE_PIN PB8
-
-// const uint8_t SLAVE_ID = 1;
-
-// uint16_t calculate_modbus_crc(uint8_t* buf, uint8_t len) {
-//     uint16_t crc_val = 0xFFFF;
-//     for (uint8_t pos = 0; pos < len; pos++) {
-//         crc_val ^= (uint16_t)buf[pos];
-//         for (uint8_t i = 8; i != 0; i--) {
-//             if ((crc_val & 0x0001) != 0) {
-//                 crc_val >>= 1;
-//                 crc_val ^= 0xA001;
-//             } else {
-//                 crc_val >>= 1;
-//             }
-//         }
-//     }
-//     return crc_val;
-// }
+// #define BUTTON_PIN PC13
 
 // void setup() {
+//     pinMode(BUTTON_PIN, INPUT);
 //     Serial1.begin(115200);
-//     Serial2.begin(9600, SERIAL_8N1);
-    
-//     pinMode(RS485_DE_PIN, OUTPUT);
-//     pinMode(RS485_RE_PIN, OUTPUT);
-    
-//     digitalWrite(RS485_DE_PIN, LOW); 
-//     digitalWrite(RS485_RE_PIN, LOW); 
-    
-//     Serial1.println("Modbus Slave Ready on USART2. Waiting for Master...");
 // }
 
 // void loop() {
-//     if (Serial2.available() >= 8) {
-//         uint8_t req[8];
-//         Serial2.readBytes(req, 8);
+//     int state = digitalRead(BUTTON_PIN);
 
-//         uint16_t recv_crc = (req[7] << 8) | req[6];
-//         uint16_t comp_crc = calculate_modbus_crc(req, 6);
-
-//         if (req[0] == SLAVE_ID && recv_crc == comp_crc) {
-//             uint8_t func_code = req[1];
-//             uint16_t start_addr = (req[2] << 8) | req[3];
-//             uint16_t qty = (req[4] << 8) | req[5];
-            
-//             uint8_t resp[64];
-//             resp[0] = SLAVE_ID;
-//             resp[1] = func_code;
-//             resp[2] = qty * 2;
-            
-//             uint8_t byte_count = 3;
-
-//             // จำลองค่าส่งกลับ
-//             if (func_code == 3 && start_addr == 0) {
-//                 uint16_t mock_temp = 2550;
-//                 resp[byte_count++] = mock_temp >> 8;
-//                 resp[byte_count++] = mock_temp & 0xFF;
-//             } else if (func_code == 4 && start_addr == 1) {
-//                 float mock_hum = 65.43;
-//                 uint32_t raw_hum;
-//                 memcpy(&raw_hum, &mock_hum, sizeof(raw_hum));
-                
-//                 resp[byte_count++] = (raw_hum >> 24) & 0xFF;
-//                 resp[byte_count++] = (raw_hum >> 16) & 0xFF;
-//                 resp[byte_count++] = (raw_hum >> 8) & 0xFF;
-//                 resp[byte_count++] = raw_hum & 0xFF;
-//             } else {
-//                 for (int i = 0; i < qty * 2; i++) resp[byte_count++] = 0;
-//             }
-
-//             uint16_t res_crc = calculate_modbus_crc(resp, byte_count);
-//             resp[byte_count++] = res_crc & 0xFF;
-//             resp[byte_count++] = res_crc >> 8;
-
-//             // 🌟 ให้ Slave รอสักครู่ เพื่อให้ Master สลับกลับมารับข้อมูลทัน
-//             delay(5); 
-
-//             digitalWrite(RS485_DE_PIN, HIGH); 
-//             digitalWrite(RS485_RE_PIN, HIGH); 
-            
-//             Serial2.write(resp, byte_count);
-//             Serial2.flush();
-//             delay(2); // ป้องกันไบต์สุดท้ายหล่นหายจากฝั่ง Slave
-            
-//             digitalWrite(RS485_DE_PIN, LOW);
-//             digitalWrite(RS485_RE_PIN, LOW);
-            
-//             Serial1.println("Received request and sent response to Master.");
-//         }
+//     if(state == LOW) {
+//         Serial1.println("Button Pressed");
+//     } else {
+//         Serial1.println("Button Released");
 //     }
+
+//     delay(100);
 // }
+
+#include <Arduino.h>
+#include "config.h"
+#include "mylib.h"
+
+MySHTC3 sht(&Wire, PB7, PB6);
+void setup() {
+
+    Serial1.begin(115200);
+
+    if (!sht.begin()) {
+
+        Serial1.println("SHTC3 init failed");
+
+        while (1);
+    }
+
+    Serial1.println("SHTC3 init success");
+}
+
+void loop() {
+
+    if (sht.read()) {
+
+        Serial1.print("Temp: ");
+        Serial1.print(sht.getTemperature());
+        Serial1.println(" C");
+
+        Serial1.print("Humidity: ");
+        Serial1.print(sht.getHumidity());
+        Serial1.println(" %");
+    }
+    else {
+
+        Serial1.println("Read failed");
+    }
+
+    Serial1.println();
+
+    delay(2000);
+}

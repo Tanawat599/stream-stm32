@@ -288,36 +288,29 @@ void LoRaWan::loop(const char* payload) {
                 
                 if (rxLen > 0) {
                     Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS A) ====="));
-                    Serial1.print(F("HEX: "));
-                    for (size_t i = 0; i < rxLen; i++) {
-                        if (rxBuffer[i] < 0x10) Serial1.print('0');
-                        Serial1.print(rxBuffer[i], HEX); Serial1.print(" ");
-                    }
-                    Serial1.println();
-
-                    Serial1.print(F("TEXT: "));
+                    Serial1.print(F("RAW HEX: "));
                     
                     size_t idx = 0;
                     for (size_t i = 0; i < rxLen; i++) {
-                        if (isprint(rxBuffer[i])) {
-                            char c = (char)rxBuffer[i];
-                            Serial1.print(c);
-                            
-                            if (idx < sizeof(downlinkText) - 1) {
-                                downlinkText[idx++] = c;
-                            }
-                        } else {
-                            Serial1.print('.');
+                        // ปริ้นต์ลง Serial Monitor
+                        if (rxBuffer[i] < 0x10) Serial1.print('0');
+                        Serial1.print(rxBuffer[i], HEX); Serial1.print(" ");
+
+                        if (idx < sizeof(downlinkText) - 2) {
+                            snprintf(&downlinkText[idx], 3, "%02X", rxBuffer[i]);
+                            idx += 2;
                         }
                     }
+                    Serial1.println();
+
                     downlinkText[idx] = '\0'; 
                     hasNewDownlink = true;    
-                    // ----------------------------------------------
-
-                    Serial1.println();
+                    
+                    Serial1.print(F("STORED PAYLOAD: "));
+                    Serial1.println(downlinkText);
                     Serial1.println(F("======================================="));
                 } else {
-                    Serial1.println(F("-> (Network MAC Command / No Text)"));
+                    Serial1.println(F("-> (Network MAC Command / No Payload)"));
                 }
             }
         } 
@@ -338,41 +331,34 @@ void LoRaWan::loop(const char* payload) {
 
         if (dl > 0 && len > 0) {
             Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS C) ====="));
+            Serial1.print(F("RAW HEX: "));
             
-            Serial1.print(F("HEX: "));
+            size_t idx = 0;
             for (size_t i = 0; i < len; i++) {
+                // ปริ้นต์ลง Serial Monitor
                 if (buf[i] < 0x10) Serial1.print('0');
                 Serial1.print(buf[i], HEX); Serial1.print(" ");
-            }
-            Serial1.println();
 
-            Serial1.print(F("TEXT: "));
-
-            size_t idx = 0;
-
-            for (size_t i = 0; i < len; i++) {
-                if (isprint(buf[i])) {
-                    char c = (char)buf[i];
-                    Serial1.print(c);
-
-                    if (idx < sizeof(downlinkText) - 1) {
-                        downlinkText[idx++] = c;
-                    }
-                } else {
-                    Serial1.print('.');
+                if (idx < sizeof(downlinkText) - 2) {
+                    snprintf(&downlinkText[idx], 3, "%02X", buf[i]);
+                    idx += 2;
                 }
             }
+            Serial1.println();
 
             downlinkText[idx] = '\0';  
             hasNewDownlink = true;     
+            
+            Serial1.print(F("STORED PAYLOAD: "));
             Serial1.println(downlinkText);
-            Serial1.println();
             Serial1.println(F("============================"));
         }
     }
-}
+} 
+
+
 bool LoRaWan::available() {
-    return true;
+    return hasNewDownlink; 
 }
 
 const char* LoRaWan::getDownlink() {
