@@ -296,10 +296,24 @@ void LoRaWan::loop(const char* payload) {
                     Serial1.println();
 
                     Serial1.print(F("TEXT: "));
+                    
+                    size_t idx = 0;
                     for (size_t i = 0; i < rxLen; i++) {
-                        if (isprint(rxBuffer[i])) Serial1.print((char)rxBuffer[i]);
-                        else Serial1.print('.');
+                        if (isprint(rxBuffer[i])) {
+                            char c = (char)rxBuffer[i];
+                            Serial1.print(c);
+                            
+                            if (idx < sizeof(downlinkText) - 1) {
+                                downlinkText[idx++] = c;
+                            }
+                        } else {
+                            Serial1.print('.');
+                        }
                     }
+                    downlinkText[idx] = '\0'; 
+                    hasNewDownlink = true;    
+                    // ----------------------------------------------
+
                     Serial1.println();
                     Serial1.println(F("======================================="));
                 } else {
@@ -351,20 +365,23 @@ void LoRaWan::loop(const char* payload) {
 
             downlinkText[idx] = '\0';  
             hasNewDownlink = true;     
-
+            Serial1.println(downlinkText);
             Serial1.println();
             Serial1.println(F("============================"));
         }
     }
 }
 bool LoRaWan::available() {
-    return hasNewDownlink;
+    return true;
 }
 
 const char* LoRaWan::getDownlink() {
     hasNewDownlink = false;
     return downlinkText;
 }
+
+
+
 // ===== END =====
 void LoRaWan::end() {
     SPI.end();

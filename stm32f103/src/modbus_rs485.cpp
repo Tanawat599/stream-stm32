@@ -49,7 +49,6 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
     uint8_t TARGET_IDX = 0;
     bool FOUND = false;
 
-    // 1. ค้นหา Channel จาก ID
     for (uint8_t I = 0; I < CH_COUNT; I++) {
         if (CH_LIST[I].CH_ID == ID) { 
             TARGET = CH_LIST[I]; 
@@ -60,7 +59,6 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
     }
     if (!FOUND) return false;
 
-    // 2. สร้าง Request Frame (คำสั่งขออ่านข้อมูล)
     uint8_t REQ[8];
     REQ[0] = TARGET.SLAVE; 
     REQ[1] = TARGET.TYPE; 
@@ -76,26 +74,18 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
     uint8_t RETRY = 0;
     bool SUCCESS = false;
 
-    // คำนวณความยาวแพ็กเกจที่คาดหวังจาก Slave 
-    // โครงสร้าง: [SlaveID] [FC] [ByteCount] [Data...] [CRC_L] [CRC_H]
-    // สำหรับ Register (Type 3, 4) จำนวนไบต์ข้อมูล = QTY * 2
     uint8_t EXPECTED_LEN = 3 + (TARGET.QTY * 2) + 2; 
 
-    // 3. เริ่มกระบวนการส่งและรอรับ
     while (RETRY < CFG.MAX_RETRY && !SUCCESS) {
         
-        // เคลียร์ Buffer ขยะที่อาจค้างอยู่ก่อนส่งใหม่
         while (_SERIAL->available()) _SERIAL->read();
 
-        // สลับเป็นโหมดส่งข้อมูล (TX)
         TX_EN();
         _SERIAL->write(REQ, 8);
-        _SERIAL->flush(); // รอข้อมูลย้ายลง Shift Register ของบอร์ด
+        _SERIAL->flush();
         
-        // *** จุดสำคัญ: ให้เวลาบิตสุดท้ายเดินทางออกไปจนพ้นสาย ก่อนสลับเป็นโหมดรับ ***
         delay(2); 
         
-        // สลับเป็นโหมดรับข้อมูล (RX) ทันที
         RX_EN();
 
         uint32_t START = millis();
@@ -103,7 +93,6 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
         
         while (millis() - START < CFG.MAX_RESP) {
             
-            // ตรวจสอบว่าข้อมูลเข้ามา "ครบตามจำนวนไบต์ที่ต้องการ" หรือยัง
             if (_SERIAL->available() >= EXPECTED_LEN) {
                 
                 uint8_t RESP[64];
@@ -115,7 +104,6 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
                 }
                 Serial1.println();
 
-                // ตรวจสอบความถูกต้อง (CRC)
                 uint16_t RECV_CRC = (uint16_t)RESP[EXPECTED_LEN - 2] | ((uint16_t)RESP[EXPECTED_LEN - 1] << 8);
                 uint16_t COMP_CRC = CALC_CRC16(RESP, EXPECTED_LEN - 2);
 
@@ -125,23 +113,20 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
                     uint8_t BYTE_COUNT = RESP[2];
                     uint8_t* PAYLOAD = &RESP[3];
                     
-                    // แปลง Data ตาม Byte Order แล้วเก็บเข้า Memory
                     CH_DATA[TARGET_IDX] = APPLY_BYTE_ORDER(PAYLOAD, BYTE_COUNT, TARGET.ORDER);
                     SUCCESS = true;
                 } else {
                     Serial1.println("MODBUS: FAILED! CRC or ID Mismatch.");
                 }
                 
-                // ออกจากลูปการรอรับข้อมูล (เพราะข้อมูลมาครบแล้ว ไม่ว่าจะถูกหรือผิด)
                 break; 
             }
         }
 
-        // กรณีไม่สำเร็จ (หมดเวลา หรือ CRC ผิด)
         if (!SUCCESS) {
             Serial1.println("MODBUS: TIMEOUT or Error. Retrying...");
             RETRY++;
-            if (RETRY < CFG.MAX_RETRY) delay(200); // พักวงจรก่อน Retry
+            if (RETRY < CFG.MAX_RETRY) delay(200); 
         }
     }
     

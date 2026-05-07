@@ -110,3 +110,29 @@ void OLED::test() {
 
     update();
 }
+
+void OLED::updateDisplay(const char* payload , const char* status) {
+    clear();
+    
+    setFont(u8g2_font_5x7_tr);
+
+    print("SYS: ONLINE", 0, 10);
+
+    print("Send Uplink:", 0, 22);
+
+    int y = 32;
+    char buf[64];
+    strncpy(buf, payload, sizeof(buf)-1);
+
+    char* line = strtok(buf, "\n");
+    while (line != NULL && y < 50) {
+        print(line, 0, y);
+        y += 8;
+        line = strtok(NULL, "\n");
+    }
+
+    String t = String("Downlink: ") + status;
+    print(t.c_str(), 0, 62);
+
+    update();
+}

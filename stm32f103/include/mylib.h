@@ -44,6 +44,7 @@ public:
   bool available();
   const char* getDownlink();
   bool downlinkHandle();
+  bool canSend();
   
 
 private:
@@ -117,7 +118,7 @@ public:
     void print(const char* text, int x, int y); 
     void println(const char* text, int x, int y);   
     void drawStr(int x, int y, const char* text);
-
+    void updateDisplay(const char* payload , const char* status);
     // ---------------- DRAW ----------------
     void drawPixel(int x, int y);
     void drawLine(int x1, int y1, int x2, int y2);

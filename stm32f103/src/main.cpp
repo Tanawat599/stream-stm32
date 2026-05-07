@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include "mylib.h"
 #include "config.h"
@@ -9,6 +8,8 @@ Logger logger(&sd);
 LoRaWan lorawan;
 I2C i2cMaster;
 MODBUS_RS485 modbus_rs485(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
+OLED oled;
+
 
 bool i2cEnabled = false;
 bool ls_swEnabled = false;
@@ -17,9 +18,13 @@ bool ledEnabled = false;
 bool analogEnabled = false;
 bool modbus_rs485Enabled = false;
 
+String displayText = "";
+
 static char main_payload[256];
 const char* i2c_payload = nullptr;
 static char modbus_payload[128];
+
+const char* downlink_payload = nullptr;
 
 void setup() {
     Serial1.begin(115200);   
@@ -51,6 +56,7 @@ void setup() {
 
     if (err) {
         Serial1.println(err.c_str());
+        
         while (1);
     }
 
@@ -82,6 +88,19 @@ void setup() {
         ls.begin();
     }
 
+    if (oledEnabled) {
+        oled.begin();
+        oled.clear();
+        oled.setFont(u8g2_font_5x7_tr);
+        oled.print("Booting...", 0, 10);
+        oled.update();
+    }
+
+    if (ledEnabled) {
+        pinMode(LED_PIN, OUTPUT);
+        digitalWrite(LED_PIN, LOW);
+    }
+
     // if (analogEnabled) {
     //     // Initialize analog components
     // }
@@ -101,27 +120,30 @@ void setup() {
     lorawan.begin();
 
     Serial1.println("System Ready");
+    delay(1000);
 }
 void loop() {
-
     memset(main_payload, 0, sizeof(main_payload));
-    int main_len = 0;
+    
+    // สร้าง JSON Document ขนาด 256 bytes (ปรับเพิ่มได้ถ้าข้อมูลเยอะ)
+    StaticJsonDocument<256> payloadDoc; 
 
     // ===== I2C =====
-    // if (i2cEnabled) {
-    //     const char* p = i2cMaster.master_loop();
-    //     if (p && strlen(p) > 0) {
-    //         main_len += snprintf(main_payload + main_len,
-    //                              sizeof(main_payload) - main_len,
-    //                              "I:%s|", p);
-    //     }
-    // }
+    if (i2cEnabled) {
+        displayText += " I2C ";
+        const char* p = i2cMaster.master_loop();
+        if (p && strlen(p) > 0) {
+            // สมมติว่า p เป็นค่าเดี่ยวๆ หรือ String
+            payloadDoc["i2c"] = p; 
+        }
+    }
 
-// ===== MODBUS =====
+    // ===== MODBUS =====
     if (modbus_rs485Enabled) {
-        char tmp[128];
-        int len = 0;
-        memset(tmp, 0, sizeof(tmp));
+        displayText += " modbus ";
+        
+        // สร้าง Object ย่อยชื่อ "modbus"
+        JsonObject modbusData = payloadDoc.createNestedObject("modbus");
 
         modbus_rs485.FETCH_ALL();
         uint8_t count = modbus_rs485.GET_CH_COUNT();
@@ -136,33 +158,28 @@ void loop() {
                 ? *((float*)&data)
                 : (float)data;
 
-            // --- แก้ไขตรงนี้ ใช้ dtostrf แทน %f ---
-            char valStr[16];
-            dtostrf(value, 6, 2, valStr);
-
-            len += snprintf(tmp + len,
-                            sizeof(tmp) - len,
-                            "%s:%s,", ch->NAME, valStr);
-            // -------------------------------------
-        }
-
-        if (len > 0) {
-            main_len += snprintf(main_payload + main_len,
-                                 sizeof(main_payload) - main_len,
-                                 "M:%s", tmp);
+            // นำข้อมูลเข้า JSON โดยใช้ชื่อ Channel (ch->NAME) เป็น Key
+            // ฟังก์ชัน serialized(String(value, 2)) ช่วยบังคับให้แสดงทศนิยม 2 ตำแหน่ง
+            modbusData[ch->NAME] = serialized(String(value, 2));
         }
     }
 
-    // ===== SAFETY =====
-    if (main_len >= sizeof(main_payload)) {
-        main_payload[sizeof(main_payload) - 1] = '\0';
-    }
+    // ===== แปลง JSON Object กลับเป็น String เพือส่งเข้า LoRa =====
+    serializeJson(payloadDoc, main_payload, sizeof(main_payload));
 
     Serial1.print("PAYLOAD: ");
+    // ผลลัพธ์ที่ได้จะหน้าตาประมาณนี้: {"i2c":"data","modbus":{"Temp":25.50,"Hum":65.43}}
     Serial1.println(main_payload);
 
     lorawan.loop(main_payload);
+    if (lorawan.available()) {
+        downlink_payload = lorawan.getDownlink();
+        Serial1.print("DOWNLINK: ");
+        Serial1.println(downlink_payload);
+    }
 
+    oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
+    displayText = "";
     delay(5000);
 }
 
