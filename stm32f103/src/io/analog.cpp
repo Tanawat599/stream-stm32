@@ -4,7 +4,7 @@
 
 Analog420::Analog420() {}
 
-void Analog420::begin(AnalogConfig cfg) {
+void Analog420::begin(Analog420Config cfg) {
   _cfg = cfg;
   pinMode(_cfg.pin, INPUT);
 }

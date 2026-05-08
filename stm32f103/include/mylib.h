@@ -9,7 +9,8 @@
 #include <ArduinoJson.h>
 #include <vector>
 #include <Adafruit_SHTC3.h>
-
+#include "device_config.h"
+#include <EEPROM.h>
 
 
 
@@ -260,7 +261,7 @@ private:
 
 
 // ================= ANALOG =================
-struct AnalogConfig {
+struct Analog420Config {
   int pin;
   float adcResolution;
   float vref;
@@ -279,7 +280,7 @@ class Analog420 {
 public:
   Analog420();
 
-  void begin(AnalogConfig cfg);
+  void begin(Analog420Config cfg);
 
   float readCurrent();
   float readVoltage();
@@ -287,7 +288,7 @@ public:
   float readScaled();    
 
 private:
-  AnalogConfig _cfg;
+  Analog420Config _cfg;
 };
 
 // ===================== RS485 =====================
@@ -403,6 +404,33 @@ public:
     float getTemperature();
 
     float getHumidity();
+};
+
+class ConfigManager {
+public:
+
+    DeviceConfig config;
+
+    bool load(const char* path);
+
+    bool save();
+
+    bool setValue(
+        const char* key,
+        const char* value
+    );
+
+    String getValue(
+        const char* key
+    );
+
+    void print(Stream& serial);
+    void clearOverrides();
+    void apply();
+
+private:
+
+    void loadOverrides();
 };
 
 #endif

@@ -48,12 +48,10 @@
       "address": "0x3C"
     },
     "led": {
-      "pin": "PA12",
       "active_low": false
     },
     "analog": {
       "enable": true,
-      "pin": "PA4",
       "scale": {
         "min": 4,
         "max": 20
@@ -103,6 +101,12 @@
       "pull": "none",
       "speed": "low",
       "startup_delay_ms": 10
+    },
+    "sht3": {
+      "enable": true,
+      "sda": "PB7",
+      "scl": "PB6",
+      "address": "0x44"
     }
   },
   "logging": {
@@ -118,8 +122,6 @@
     },
     "rs485": {
       "port": "Serial2",
-      "de_pin": "PA8",
-      "re_pin": "PA9",
       "baud": 9600,
       "timeout": 1000,
       "frame": {
