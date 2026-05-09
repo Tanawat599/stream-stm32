@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#define MAGIC_NUMBER 0xA1B2C3D5 // เปลี่ยน Magic เพื่อให้บอร์ด Reset ค่าเก่าทิ้งเมื่ออัพโค้ดใหม่
+#define MAGIC_NUMBER 0xA1B2C3D6 // bumped to force factory reset after struct/layout changes
 #define MAX_STR 32
 #define MIN_STR 16
 #define MAX_I2C_CHANNELS 2
