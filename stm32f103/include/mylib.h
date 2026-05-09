@@ -7,6 +7,9 @@
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>
+#include <stdint.h>
+// Global runtime flag (defined in main.cpp)
+extern bool isLogging;
 #include <vector>
 #include <Adafruit_SHTC3.h>
 #include "device_config.h"
@@ -37,6 +40,7 @@ class LoRaWan {
 public:
   void begin();
   void loop(const char* payload);
+  void sendNow(const char* payload);
   void loadConfig(const JsonObject& lora);
   void loadConfigFromStruct(const LoRaCfg& lora_cfg);
   void setMode(LoRaClassMode mode);  
@@ -442,40 +446,42 @@ public:
 
 class SerialCLI {
 public:
-    void begin(Stream& serial, ConfigManager& cfgMgr);
-    void update();
-    void printPrompt();
+  void begin(Stream& serial, ConfigManager& cfgMgr, SDResourceManager* sd = nullptr, LowSideSwitch* ls = nullptr, LoRaWan* lorawan = nullptr);
+  void update();
+  void printPrompt();
 
 private:
-    Stream* _serial;
-    ConfigManager* _cfgMgr;
-    String _buffer;
+  Stream* _serial;
+  ConfigManager* _cfgMgr;
+  SDResourceManager* _sd;
+  LowSideSwitch* _ls;
+  LoRaWan* _lorawan;
+  String _buffer;
 
-    // Core CLI
-    void processCommand(String cmdLine);
-    void printHelp();
-    //void printPrompt();
-    void clearScreen();
-    void printSuccess(const char* msg);
-    void printError(const char* msg);
-    void handleSetLogging(String key, String value);
-    void handleSetComm(String key, String value);
+  // Core CLI
+  void processCommand(String cmdLine);
+  void printHelp();
+  void clearScreen();
+  void printSuccess(const char* msg);
+  void printError(const char* msg);
+  void handleSetLogging(String key, String value);
+  void handleSetComm(String key, String value);
 
+  void handleSetCommand(String args);
+  void handleSetDevice(String key, String value);
+  void handleSetLoRa(String key, String value);
+  void handleSetHardware(String key, String value);
 
-    void handleSetCommand(String args);
-    void handleSetDevice(String key, String value);
-    void handleSetLoRa(String key, String value);
-    void handleSetHardware(String key, String value);
+  // --- Show Handlers ---
+  void showConfig(String category);
+  void showSDConfig();
+  void showDeviceConfig();
+  void showLoRaConfig();
+  void showHardwareConfig();
 
-    // --- Show Handlers ---
-    void showConfig(String category);
-    void showDeviceConfig();
-    void showLoRaConfig();
-    void showHardwareConfig();
-
-    // System commands
-    void rebootSystem();
-    void factoryReset();
+  // System commands
+  void rebootSystem();
+  void factoryReset();
 };
 
 

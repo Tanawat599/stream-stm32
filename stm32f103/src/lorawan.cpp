@@ -520,6 +520,65 @@ const char* LoRaWan::getDownlink() {
     return downlinkText;
 }
 
+void LoRaWan::sendNow(const char* payload) {
+    lastSend = millis();
+
+    Serial1.println(F("\n===== UPLINK (manual) ====="));
+    Serial1.print(F("Payload: "));
+    Serial1.println(payload);
+
+    uint8_t rxBuffer[255];
+    size_t rxLen = 0;
+
+    int16_t state = node.sendReceive(
+        (uint8_t*)payload,
+        strlen(payload),
+        currentFPort,
+        rxBuffer,
+        &rxLen,
+        currentAck
+    );
+
+    if (state >= RADIOLIB_ERR_NONE) {
+        Serial1.print(F("[UPLINK] Success! "));
+        if (state == 0) {
+            Serial1.println(F("(No Downlink)"));
+        } else if (state == 1 || state == 2) {
+            Serial1.print(F("(Downlink in RX")); Serial1.print(state); Serial1.println(F(")"));
+            if (rxLen > 0) {
+                Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS A) ====="));
+                Serial1.print(F("RAW HEX: "));
+
+                size_t idx = 0;
+                for (size_t i = 0; i < rxLen; i++) {
+                    if (rxBuffer[i] < 0x10) Serial1.print('0');
+                    Serial1.print(rxBuffer[i], HEX); Serial1.print(" ");
+
+                    if (idx < sizeof(downlinkText) - 2) {
+                        snprintf(&downlinkText[idx], 3, "%02X", rxBuffer[i]);
+                        idx += 2;
+                    }
+                }
+                Serial1.println();
+
+                downlinkText[idx] = '\0';
+                hasNewDownlink = true;
+
+                Serial1.print(F("STORED PAYLOAD: "));
+                Serial1.println(downlinkText);
+                Serial1.println(F("======================================="));
+            } else {
+                Serial1.println(F("-> (Network MAC Command / No Payload)"));
+            }
+        }
+    } else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
+        Serial1.println(F("[UPLINK] NO ACK"));
+    } else {
+        Serial1.print(F("[UPLINK] ERROR CODE: "));
+        Serial1.println(state);
+    }
+}
+
 
 
 // ===== END =====

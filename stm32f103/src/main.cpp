@@ -72,7 +72,7 @@ void setup() {
     delay(1000);
     
     cfgMgr.begin();
-    cli.begin(Serial1, cfgMgr);
+    cli.begin(Serial1, cfgMgr, &sd, &ls, &lorawan);
     
     Serial1.println("\n[SYSTEM] Booting...");
 

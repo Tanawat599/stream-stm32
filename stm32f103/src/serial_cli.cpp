@@ -1,11 +1,14 @@
 #include "mylib.h"
 #include "device_config.h"
 
-void SerialCLI::begin(Stream& serial, ConfigManager& cfgMgr) {
+void SerialCLI::begin(Stream& serial, ConfigManager& cfgMgr, SDResourceManager* sd, LowSideSwitch* ls, LoRaWan* lorawan) {
     _serial = &serial;
     _cfgMgr = &cfgMgr;
+    _sd = sd;
+    _ls = ls;
+    _lorawan = lorawan;
     _buffer = "";
-    _buffer.reserve(64); 
+    _buffer.reserve(64);
 
     clearScreen();
 
@@ -70,6 +73,42 @@ void SerialCLI::processCommand(String cmdLine) {
     else if (cmd == "show") {
         showConfig(args); 
     } 
+    else if (cmd == "exit" || cmd == "resume") {
+        isLogging = true;
+        printSuccess("Resuming logging");
+    }
+    else if (cmd == "sd.list" || cmd == "listfile" || cmd == "ls") {
+        if (!_sd) printError("SD not available");
+        else _sd->listFiles(*_serial, "/");
+    }
+    else if (cmd == "sd.read" || cmd == "sd.cat" || cmd == "cat") {
+        if (!_sd) { printError("SD not available"); }
+        else {
+            if (args.length() == 0) { printError("Usage: sd.cat <path>"); }
+            else {
+                String content = _sd->readFile(args.c_str());
+                if (content == "ERROR_OPEN") printError("Open failed");
+                else {
+                    _serial->println(content);
+                }
+            }
+        }
+    }
+    else if (cmd == "uplink") {
+        if (!_lorawan) { printError("LoRa not available"); }
+        else if (args.length() == 0) { printError("Usage: uplink <payload>"); }
+        else {
+            _serial->print("Sending uplink: "); _serial->println(args);
+            _lorawan->sendNow(args.c_str());
+        }
+    }
+    else if (cmd == "toggle") {
+        if (!_ls) { printError("LS Switch not available"); }
+        else {
+            _ls->toggle();
+            printSuccess("Toggled LS Switch");
+        }
+    }
     else if (cmd == "set") {
         if (args.length() == 0) printError("Usage: set <category.key> <value>");
         else handleSetCommand(args);
@@ -281,6 +320,11 @@ void SerialCLI::showConfig(String category) {
     category.toLowerCase();
     
     _serial->println(CLI_COLOR_BOLD "\n--- Configuration ---" CLI_COLOR_RESET);
+    if (category == "sd" || category == "sdconfig" || category == "sd.json") {
+        showSDConfig();
+        _serial->println(CLI_COLOR_BOLD "---------------------\n" CLI_COLOR_RESET);
+        return;
+    }
 
     if (category == "" || category == "all" || category == "device") {
         showDeviceConfig();
@@ -292,6 +336,26 @@ void SerialCLI::showConfig(String category) {
         showHardwareConfig();
     }
     _serial->println(CLI_COLOR_BOLD "---------------------\n" CLI_COLOR_RESET);
+}
+
+void SerialCLI::showSDConfig() {
+    if (!_sd) { printError("SD not available"); return; }
+
+    const char* cfgName = _sd->getConfig();
+    _serial->printf("SD Config file: %s\n", cfgName);
+    String content = _sd->readFile(cfgName);
+    if (content == "ERROR_OPEN") { printError("Open failed"); return; }
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError err = deserializeJson(doc, content);
+    if (err) {
+        _serial->println("JSON parse error");
+        _serial->println(content);
+        return;
+    }
+
+    serializeJsonPretty(doc, *_serial);
+    _serial->println();
 }
 
 
