@@ -254,6 +254,130 @@ void LoRaWan::loadConfig(const JsonObject& lora) {
     Serial1.println(F("[LoRa] Config Loaded OK\n"));
 }
 
+void LoRaWan::loadConfigFromStruct(const LoRaCfg& cfg) {
+
+    Serial1.println(F("\n========== LORAWAN CONFIG =========="));
+
+    // ================= MODE =================
+    Serial1.print(F("Mode                : "));
+    Serial1.println(cfg.lorawan.mode);
+
+    const char* modeStr = cfg.lorawan.mode;
+
+    if (strcmp(modeStr, "ABP") == 0) {
+        currentActivation = MODE_ABP;
+    }
+    else {
+        currentActivation = MODE_OTAA;
+    }
+
+    // ================= FPORT =================
+    currentFPort = cfg.lorawan.fport;
+
+    Serial1.print(F("FPort               : "));
+    Serial1.println(currentFPort);
+
+    // ================= CONFIRMED =================
+    currentAck = cfg.lorawan.confirmed_uplink;
+
+    Serial1.print(F("Confirmed Uplink    : "));
+    Serial1.println(currentAck);
+
+    // ================= ADR =================
+    currentADR = cfg.lorawan.tx_adr;
+
+    Serial1.print(F("ADR                 : "));
+    Serial1.println(currentADR);
+
+    // ================= SF =================
+    currentSF = cfg.lorawan.tx_sf;
+
+    Serial1.print(F("Spreading Factor    : SF"));
+    Serial1.println(currentSF);
+
+    node.setADR(currentADR);
+
+    node.setDatarate(12 - currentSF);
+
+    // ================= UPLINK INTERVAL =================
+    uplinkIntervalMs = (cfg.lorawan.uplink_interval_sec) * 1000UL;
+
+    Serial1.print(F("Uplink Interval     : "));
+    Serial1.print(cfg.lorawan.uplink_interval_sec);
+    Serial1.println(F(" sec"));
+
+    // ================= DUTY CYCLE =================
+    Serial1.print(F("Duty Cycle          : "));
+    Serial1.println(cfg.lorawan.duty_cycle);
+
+    node.setDutyCycle(cfg.lorawan.duty_cycle);
+
+    // =====================================================
+    // ======================= OTAA ========================
+    // =====================================================
+
+    Serial1.println(F("\n---------- OTAA ----------"));
+
+    Serial1.print(F("Join EUI            : "));
+    Serial1.println(cfg.lorawan.otaa.join_eui);
+
+    Serial1.print(F("Dev EUI             : "));
+    Serial1.println(cfg.lorawan.otaa.dev_eui);
+
+    Serial1.print(F("App Key             : "));
+    Serial1.println(cfg.lorawan.otaa.app_key);
+
+    if (strlen(cfg.lorawan.otaa.join_eui) > 0) {
+
+        joinEUI = parseHexToUint64(cfg.lorawan.otaa.join_eui);
+
+        devEUI  = parseHexToUint64(cfg.lorawan.otaa.dev_eui);
+
+        parseHexToBytes(cfg.lorawan.otaa.app_key, appKey, 16);
+    }
+
+    // =====================================================
+    // ======================== ABP ========================
+    // =====================================================
+
+    Serial1.println(F("\n---------- ABP ----------"));
+
+    Serial1.print(F("Dev Addr            : "));
+    Serial1.println(cfg.lorawan.abp.dev_addr);
+
+    Serial1.print(F("NwkSKey             : "));
+    Serial1.println(cfg.lorawan.abp.nwk_skey);
+
+    Serial1.print(F("AppSKey             : "));
+    Serial1.println(cfg.lorawan.abp.app_skey);
+
+    if (strlen(cfg.lorawan.abp.dev_addr) > 0) {
+
+        devAddr = parseHexToUint32(cfg.lorawan.abp.dev_addr);
+
+        parseHexToBytes(cfg.lorawan.abp.nwk_skey, nwkSEncKey, 16);
+
+        parseHexToBytes(cfg.lorawan.abp.app_skey, appSKey, 16);
+    }
+
+    // =====================================================
+    // ======================== CLASS ======================
+    // =====================================================
+
+    Serial1.print(F("\nClass               : "));
+    Serial1.println(cfg.lorawan.class_type);
+
+    if (strcmp(cfg.lorawan.class_type, "C") == 0) {
+        setMode(CLASS_C);
+    }
+    else {
+        setMode(CLASS_A);
+    }
+
+    Serial1.println(F("\n[LoRa] Config Loaded Successfully"));
+    Serial1.println(F("====================================\n"));
+}
+
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 

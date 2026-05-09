@@ -13,7 +13,6 @@
 #include <EEPROM.h>
 
 
-
 // ===================== LoRa P2P =====================
 class LoRaP2P {
 public:
@@ -39,6 +38,7 @@ public:
   void begin();
   void loop(const char* payload);
   void loadConfig(const JsonObject& lora);
+  void loadConfigFromStruct(const LoRaCfg& lora_cfg);
   void setMode(LoRaClassMode mode);  
   void classC();
   void classA();
@@ -114,6 +114,7 @@ public:
     void clear();
     void update();
     void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
+    void loadConfigFromStruct(const HardwareCfg& hw);
 
     // ---------------- TEXT ----------------
     void setFont(const uint8_t* font);
@@ -155,6 +156,7 @@ struct I2C_Device {
 class I2C {
 public:
     void loadConfig(const JsonObject& i2c);
+    void loadConfig(const I2CConfig& i2c_cfg);
     void master_begin();
     const char* master_loop();
     void slave_begin(uint8_t address);
@@ -182,6 +184,7 @@ private:
 
     static volatile uint8_t _currentRegister; 
     static uint8_t _registers[16]; 
+    void resetInternalConfig();
 };
 
 // ===================== RS485 =====================
@@ -332,7 +335,8 @@ public:
     uint8_t GET_CH_COUNT();
     MODBUS_CH* GET_CH(uint8_t index);
     uint32_t GET_DATA_BY_INDEX(uint8_t index);
-    bool loadConfig(const JsonObject& rs485);
+    bool loadConfigFromJson(const JsonObject& rs485);
+    bool loadConfigFromStruct(const HardwareCfg& hw);
 
 private:
     HardwareSerial* _SERIAL; 
@@ -372,7 +376,8 @@ private:
 public:
     LowSideSwitch();
 
-    bool loadConfig(const JsonObject& sw);
+    bool loadConfigFromJson(const JsonObject& sw);
+    bool loadConfigFromStruct(const HardwareCfg& hw);
     void begin();
 
     void on();
@@ -396,6 +401,7 @@ private:
 public:
 
     MySHTC3(TwoWire* wire, uint8_t sda, uint8_t scl);
+  bool loadConfigFromStruct(const HardwareCfg& hw);
 
     bool begin();
 
@@ -406,31 +412,71 @@ public:
     float getHumidity();
 };
 
-class ConfigManager {
+
+
+// struct DeviceConfig {
+//     uint32_t magic;       // ใช้เช็คว่า EEPROM เคยถูกเขียนหรือยัง
+//     DeviceInfoCfg device;
+//     HardwareCfg hardware;
+//     LoRaCfg lora;
+// };
+
+// // ================= CLASS MANAGER =================
+// class ConfigManager {
+// public:
+//     bool begin();
+//     bool save();
+//     DeviceConfig& get();
+//     void factoryReset();
+
+// private:
+//     DeviceConfig config;
+// };
+
+#define CLI_COLOR_RESET   "\x1b[0m"
+#define CLI_COLOR_RED     "\x1b[31m"
+#define CLI_COLOR_GREEN   "\x1b[32m"
+#define CLI_COLOR_YELLOW  "\x1b[33m"
+#define CLI_COLOR_CYAN    "\x1b[36m"
+#define CLI_COLOR_BOLD    "\x1b[1m"
+
+class SerialCLI {
 public:
-
-    DeviceConfig config;
-
-    bool load(const char* path);
-
-    bool save();
-
-    bool setValue(
-        const char* key,
-        const char* value
-    );
-
-    String getValue(
-        const char* key
-    );
-
-    void print(Stream& serial);
-    void clearOverrides();
-    void apply();
+    void begin(Stream& serial, ConfigManager& cfgMgr);
+    void update();
+    void printPrompt();
 
 private:
+    Stream* _serial;
+    ConfigManager* _cfgMgr;
+    String _buffer;
 
-    void loadOverrides();
+    // Core CLI
+    void processCommand(String cmdLine);
+    void printHelp();
+    //void printPrompt();
+    void clearScreen();
+    void printSuccess(const char* msg);
+    void printError(const char* msg);
+    void handleSetLogging(String key, String value);
+    void handleSetComm(String key, String value);
+
+
+    void handleSetCommand(String args);
+    void handleSetDevice(String key, String value);
+    void handleSetLoRa(String key, String value);
+    void handleSetHardware(String key, String value);
+
+    // --- Show Handlers ---
+    void showConfig(String category);
+    void showDeviceConfig();
+    void showLoRaConfig();
+    void showHardwareConfig();
+
+    // System commands
+    void rebootSystem();
+    void factoryReset();
 };
+
 
 #endif

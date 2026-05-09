@@ -46,6 +46,19 @@ void OLED::loadConfig(SDResourceManager& sd, const char* path) {
 
 }
 
+void OLED::loadConfigFromStruct(const HardwareCfg& hw) {
+    if (!hw.oled.enabled) {
+        Serial1.println(F("OLED: disabled in struct config"));
+        return;
+    }
+    uint8_t addr = hw.oled.address;
+    u8g2.setI2CAddress(addr << 1);
+    Serial1.print(F("OLED: Address set from struct to 0x"));
+    char buf[8];
+    sprintf(buf, "%02X", addr);
+    Serial1.println(buf);
+}
+
 void OLED::clear() {
     u8g2.clearBuffer();
 }

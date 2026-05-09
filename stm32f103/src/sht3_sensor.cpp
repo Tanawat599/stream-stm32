@@ -46,6 +46,21 @@ bool MySHTC3::read() {
     return true;
 }
 
+bool MySHTC3::loadConfigFromStruct(const HardwareCfg& hw) {
+    if (!hw.sht3.enable) {
+        Serial1.println(F("SHT3: disabled in struct config"));
+        return false;
+    }
+
+    uint8_t addr = hw.sht3.address;
+    Serial1.print(F("SHT3: configured address from struct: 0x"));
+    char buf[8];
+    sprintf(buf, "%02X", addr);
+    Serial1.println(buf);
+
+    return true;
+}
+
 float MySHTC3::getTemperature() {
     return _temperature;
 }

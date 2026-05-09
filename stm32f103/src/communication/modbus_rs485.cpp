@@ -201,7 +201,7 @@ uint32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
     if (index >= CH_COUNT) return 0;
     return CH_DATA[index];
 }
-bool MODBUS_RS485::loadConfig(const JsonObject& rs485) {
+bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
 
     
 
@@ -255,4 +255,58 @@ bool MODBUS_RS485::loadConfig(const JsonObject& rs485) {
     }
     
     return true; 
+}
+
+bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
+    // Map HardwareCfg -> RS485_CONF
+    RS485_CONF conf;
+    conf.ENABLE   = hw.modbus_rs485.enable;
+    conf.BAUD     = hw.modbus_rs485.baud_rate;
+    conf.STOP     = hw.modbus_rs485.stop_bit;
+    conf.DATA     = hw.modbus_rs485.data_bit;
+    conf.INTERVAL = hw.modbus_rs485.interval_ms;
+    conf.MAX_RESP = hw.modbus_rs485.max_resp_ms;
+    conf.MAX_RETRY= hw.modbus_rs485.max_retry;
+
+    String parityStr = String(hw.modbus_rs485.parity);
+    if (parityStr == "ODD") conf.PARITY = MB_PARITY_ODD;
+    else if (parityStr == "EVEN") conf.PARITY = MB_PARITY_EVEN;
+    else conf.PARITY = MB_PARITY_NONE;
+
+    this->INIT(conf);
+    Serial1.println(F("MODBUS: Base Config Loaded from struct"));
+
+    // Load channels from struct array
+    for (int i = 0; i < MAX_MODBUS_CHANNELS; i++) {
+        const ModbusChannelCfg& ch = hw.modbus_rs485.channels[i];
+        if (ch.id == 0) continue;
+
+        MODBUS_CH m_ch;
+        m_ch.CH_ID = ch.id;
+        strlcpy(m_ch.NAME, ch.name, sizeof(m_ch.NAME));
+        m_ch.SLAVE = ch.slave_id;
+        m_ch.ADDR  = ch.address;
+        m_ch.QTY   = ch.quantity;
+        m_ch.SIGN  = ch.sign;
+
+        String typeStr = String(ch.type);
+        if (typeStr == "COIL") m_ch.TYPE = MB_COIL;
+        else if (typeStr == "INPUT") m_ch.TYPE = MB_INPUT;
+        else m_ch.TYPE = MB_HOLDING;
+
+        String orderStr = String(ch.byte_order);
+        if (orderStr == "BA") m_ch.ORDER = BO_BA;
+        else if (orderStr == "ABCD") m_ch.ORDER = BO_ABCD;
+        else if (orderStr == "CDBA") m_ch.ORDER = BO_CDBA;
+        else if (orderStr == "BADC") m_ch.ORDER = BO_BADC;
+        else if (orderStr == "DCBA") m_ch.ORDER = BO_DCBA;
+        else m_ch.ORDER = BO_AB;
+
+        this->ADD_CH(m_ch);
+    }
+
+    Serial1.print(F("MODBUS: Loaded Channels = "));
+    Serial1.println(this->CH_COUNT);
+
+    return true;
 }

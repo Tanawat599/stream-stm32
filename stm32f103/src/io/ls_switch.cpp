@@ -27,7 +27,7 @@ LowSideSwitch::LowSideSwitch()
     memset(&conf, 0, sizeof(conf));
 }
 
-bool LowSideSwitch::loadConfig(const JsonObject& sw)
+bool LowSideSwitch::loadConfigFromJson(const JsonObject& sw)
 {
 
 
@@ -100,6 +100,38 @@ bool LowSideSwitch::loadConfig(const JsonObject& sw)
     else Serial1.println("LOW");
 
     Serial1.println("======================");
+    return true;
+}
+
+bool LowSideSwitch::loadConfigFromStruct(const HardwareCfg& hw)
+{
+    const auto& sw = hw.ls_sw;
+
+    conf.ENABLE = sw.enable;
+    conf.INVERTED = sw.inverted;
+    conf.STARTUP_DELAY = sw.startup_delay_ms;
+
+    String def = String(sw.default_state);
+    conf.DEFAULT_STATE = (def == "on") ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    String pinStr = String(LS_SW_PIN);
+    // DeviceConfig stores pin as string; fall back to macro if not provided
+    // Keep existing pin (configured at compile time) so attempt to parse not required
+
+    String mode = String(sw.mode);
+    conf.MODE = (mode == "open_drain") ? GPIO_MODE_OUTPUT_OD : GPIO_MODE_OUTPUT_PP;
+
+    String pull = String(sw.pull);
+    if (pull == "up") conf.PULL = GPIO_PULLUP;
+    else if (pull == "down") conf.PULL = GPIO_PULLDOWN;
+    else conf.PULL = GPIO_NOPULL;
+
+    String speed = String(sw.speed);
+    if (speed == "high") conf.SPEED = GPIO_SPEED_FREQ_HIGH;
+    else if (speed == "medium") conf.SPEED = GPIO_SPEED_FREQ_MEDIUM;
+    else conf.SPEED = GPIO_SPEED_FREQ_LOW;
+
+    Serial1.println(F("LS_SW: Config Loaded from struct"));
     return true;
 }
 
