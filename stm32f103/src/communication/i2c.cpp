@@ -25,6 +25,7 @@ Wire.begin();
     Serial1.print(F("I2C Master Initialized at "));
     Serial1.print(_frequency);
     Serial1.println(F(" Hz"));
+    Serial1.println();
 }
 void I2C::loadConfig(const JsonObject& i2c) {
     Serial1.println(F("\n[I2C] Loading Config..."));
@@ -121,13 +122,11 @@ void I2C::loadConfig(const JsonObject& i2c) {
     Serial1.println(F("[I2C] Config Load Complete!\n"));
 }
 void I2C::loadConfig(const I2CConfig& i2c_cfg) {
-    Serial1.println(F("\n[I2C] Loading Config from EEPROM (Struct)..."));
 
     // ===== 1. RESET OLD DATA =====
     resetInternalConfig();
 
     // ===== 2. BASIC CONFIG =====
-    // ดึงค่าจาก Struct มาเก็บใน Member Variables ของ Class
     _enabled     = i2c_cfg.enable;
     _frequency   = i2c_cfg.frequency;
     _interval_ms = i2c_cfg.interval_ms;
@@ -136,29 +135,24 @@ void I2C::loadConfig(const I2CConfig& i2c_cfg) {
     Serial1.printf("[I2C] Enabled: %d, Freq: %lu, Interval: %lu, Retry: %d\n",
                    _enabled, _frequency, _interval_ms, _max_retry);
 
-    // ถ้าไม่ได้ Enable ก็ไม่ต้องโหลด Devices ต่อ
     if (!_enabled) {
         Serial1.println(F("[I2C] Disabled. Skip device loading."));
         return;
     }
 
     // ===== 3. DEVICES & CHANNELS =====
-    // วนลูปตามจำนวนอุปกรณ์สูงสุดที่กำหนดไว้ใน Struct (เช่น devices[1])
     for (int i = 0; i < 1; i++) { 
         const auto& dev_struct = i2c_cfg.devices[i];
 
-        // ตรวจสอบว่า Address มีค่าหรือไม่ (ถ้าเป็น 0 แสดงว่าเป็นช่องว่าง)
         if (dev_struct.address == 0) continue;
 
         I2C_Device d;
         d.name    = String(dev_struct.name);
         d.address = dev_struct.address;
 
-        // วนลูปโหลด Channels (เช่น channels[2])
         for (int j = 0; j < 2; j++) {
             const auto& ch_struct = dev_struct.channels[j];
             
-            // เช็คว่า channel นี้มีการใช้งานหรือไม่ (ดูจากชื่อ หรือ ID)
             if (strlen(ch_struct.name) == 0) continue;
 
             I2C_Channel c;

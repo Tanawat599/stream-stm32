@@ -54,6 +54,8 @@
 
 // ===== LS Switch =====
 #define LS_SW_PIN PB5
+#define LS_SW_PORT  GPIOB
+
 
 // ===== Button CONFIG =====
 #define BUTTON_PIN PC13

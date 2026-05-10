@@ -220,7 +220,6 @@ bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
     else conf.PARITY = MB_PARITY_NONE;
 
     this->INIT(conf);
-    Serial1.println(F("MODBUS: Base Config Loaded from SD"));
 
     if (rs485["channels"].is<JsonArray>()) {
         JsonArray channels = rs485["channels"].as<JsonArray>();
@@ -248,10 +247,29 @@ bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
             else if (orderStr == "DCBA") m_ch.ORDER = BO_DCBA;
             else m_ch.ORDER = BO_AB;
 
+            if (this->CH_COUNT >= MAX_MODBUS_CHANNELS) {
+                Serial1.println(F("[MODBUS] Error: Max channels reached, ignoring extra"));
+                continue;
+            }
             this->ADD_CH(m_ch);
         }
-        Serial1.print(F("MODBUS: Loaded Channels = "));
+        Serial1.print(F("[MODBUS] Enabled: "));
+        Serial1.print(conf.ENABLE ? "1" : "0");
+        Serial1.print(F(", Baud: "));
+        Serial1.print(conf.BAUD);
+        Serial1.print(F(", Parity: "));
+        if (conf.PARITY == MB_PARITY_ODD) Serial1.print("ODD");
+        else if (conf.PARITY == MB_PARITY_EVEN) Serial1.print("EVEN");
+        else Serial1.print("NONE");
+        Serial1.print(F(", Interval: "));
+        Serial1.print(conf.INTERVAL);
+        Serial1.print(F("ms, MaxResp: "));
+        Serial1.print(conf.MAX_RESP);
+        Serial1.print(F("ms, Retry: "));
+        Serial1.println(conf.MAX_RETRY);
+        Serial1.print(F("[MODBUS] Loaded Channels = "));
         Serial1.println(this->CH_COUNT);
+        Serial1.println();
     }
     
     return true; 
@@ -274,7 +292,6 @@ bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
     else conf.PARITY = MB_PARITY_NONE;
 
     this->INIT(conf);
-    Serial1.println(F("MODBUS: Base Config Loaded from struct"));
 
     // Load channels from struct array
     for (int i = 0; i < MAX_MODBUS_CHANNELS; i++) {
@@ -302,11 +319,29 @@ bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
         else if (orderStr == "DCBA") m_ch.ORDER = BO_DCBA;
         else m_ch.ORDER = BO_AB;
 
+        if (this->CH_COUNT >= MAX_MODBUS_CHANNELS) {
+            Serial1.println(F("[MODBUS] Error: Max channels reached, ignoring extra"));
+            continue;
+        }
         this->ADD_CH(m_ch);
     }
-
-    Serial1.print(F("MODBUS: Loaded Channels = "));
+    Serial1.print(F("[MODBUS] Enabled: "));
+    Serial1.print(conf.ENABLE ? "1" : "0");
+    Serial1.print(F(", Baud: "));
+    Serial1.print(conf.BAUD);
+    Serial1.print(F(", Parity: "));
+    if (conf.PARITY == MB_PARITY_ODD) Serial1.print("ODD");
+    else if (conf.PARITY == MB_PARITY_EVEN) Serial1.print("EVEN");
+    else Serial1.print("NONE");
+    Serial1.print(F(", Interval: "));
+    Serial1.print(conf.INTERVAL);
+    Serial1.print(F("ms, MaxResp: "));
+    Serial1.print(conf.MAX_RESP);
+    Serial1.print(F("ms, Retry: "));
+    Serial1.println(conf.MAX_RETRY);
+    Serial1.print(F("[MODBUS] Loaded Channels = "));
     Serial1.println(this->CH_COUNT);
+    Serial1.println();
 
     return true;
 }

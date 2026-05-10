@@ -40,7 +40,7 @@ bool LowSideSwitch::loadConfigFromJson(const JsonObject& sw)
     conf.DEFAULT_STATE = (def == "on") ? GPIO_PIN_SET : GPIO_PIN_RESET;
 
     // pin
-    String pinStr = sw["pin"] | "PB5";
+    String pinStr = "PB5";
     if (!parsePin(pinStr, conf.PORT, conf.PIN)) {
         Serial1.println(F("LS_SW: invalid pin"));
         return false;
@@ -62,76 +62,81 @@ bool LowSideSwitch::loadConfigFromJson(const JsonObject& sw)
     else if (speed == "medium") conf.SPEED = GPIO_SPEED_FREQ_MEDIUM;
     else conf.SPEED = GPIO_SPEED_FREQ_LOW;
 
-    Serial1.println(F("LS_SW: Config Loaded"));
-    Serial1.println("==== LS_SW CONFIG ====");
-
-    Serial1.print("ENABLE: ");
-    Serial1.println(conf.ENABLE);
-
-    Serial1.print("INVERTED: ");
-    Serial1.println(conf.INVERTED);
-
-    Serial1.print("STARTUP_DELAY: ");
-    Serial1.println(conf.STARTUP_DELAY);
-
-    Serial1.print("DEFAULT_STATE: ");
-    Serial1.println(conf.DEFAULT_STATE == GPIO_PIN_SET ? "ON" : "OFF");
-
-    Serial1.print("PORT: ");
-    if (conf.PORT == GPIOA) Serial1.println("GPIOA");
-    else if (conf.PORT == GPIOB) Serial1.println("GPIOB");
-    else if (conf.PORT == GPIOC) Serial1.println("GPIOC");
-    else Serial1.println("UNKNOWN");
-
-    Serial1.print("PIN: ");
-    Serial1.println(conf.PIN);  
-
-    Serial1.print("MODE: ");
-    Serial1.println(conf.MODE == GPIO_MODE_OUTPUT_OD ? "OPEN_DRAIN" : "PUSH_PULL");
-
-    Serial1.print("PULL: ");
-    if (conf.PULL == GPIO_PULLUP) Serial1.println("PULLUP");
-    else if (conf.PULL == GPIO_PULLDOWN) Serial1.println("PULLDOWN");
-    else Serial1.println("NONE");
-
-    Serial1.print("SPEED: ");
-    if (conf.SPEED == GPIO_SPEED_FREQ_HIGH) Serial1.println("HIGH");
-    else if (conf.SPEED == GPIO_SPEED_FREQ_MEDIUM) Serial1.println("MEDIUM");
-    else Serial1.println("LOW");
-
-    Serial1.println("======================");
+    Serial1.print(F("[LS_SW] Enabled: "));
+    Serial1.print(conf.ENABLE ? "1" : "0");
+    Serial1.print(F(", Inverted: "));
+    Serial1.print(conf.INVERTED ? "1" : "0");
+    Serial1.print(F(", Default: "));
+    Serial1.print(conf.DEFAULT_STATE == GPIO_PIN_SET ? "ON" : "OFF");
+    Serial1.print(F(", Mode: "));
+    Serial1.print(conf.MODE == GPIO_MODE_OUTPUT_OD ? "OPEN_DRAIN" : "PUSH_PULL");
+    Serial1.print(F(", Pull: "));
+    if (conf.PULL == GPIO_PULLUP) Serial1.print("UP");
+    else if (conf.PULL == GPIO_PULLDOWN) Serial1.print("DOWN");
+    else Serial1.print("NONE");
+    Serial1.print(F(", Speed: "));
+    if (conf.SPEED == GPIO_SPEED_FREQ_HIGH) Serial1.print("HIGH");
+    else if (conf.SPEED == GPIO_SPEED_FREQ_MEDIUM) Serial1.print("MEDIUM");
+    else Serial1.print("LOW");
+    Serial1.print(F(", Delay: "));
+    Serial1.print(conf.STARTUP_DELAY);
+    Serial1.println(" ms");
     return true;
 }
 
-bool LowSideSwitch::loadConfigFromStruct(const HardwareCfg& hw)
-{
+bool LowSideSwitch::loadConfigFromStruct(const HardwareCfg& hw) {
     const auto& sw = hw.ls_sw;
 
     conf.ENABLE = sw.enable;
     conf.INVERTED = sw.inverted;
     conf.STARTUP_DELAY = sw.startup_delay_ms;
 
-    String def = String(sw.default_state);
-    conf.DEFAULT_STATE = (def == "on") ? GPIO_PIN_SET : GPIO_PIN_RESET;
+    if (strcmp(sw.default_state, "on") == 0) 
+        conf.DEFAULT_STATE = GPIO_PIN_SET;
+    else 
+        conf.DEFAULT_STATE = GPIO_PIN_RESET;
 
-    String pinStr = String(LS_SW_PIN);
-    // DeviceConfig stores pin as string; fall back to macro if not provided
-    // Keep existing pin (configured at compile time) so attempt to parse not required
+    if (strcmp(sw.mode, "open_drain") == 0) 
+        conf.MODE = GPIO_MODE_OUTPUT_OD;
+    else 
+        conf.MODE = GPIO_MODE_OUTPUT_PP;
 
-    String mode = String(sw.mode);
-    conf.MODE = (mode == "open_drain") ? GPIO_MODE_OUTPUT_OD : GPIO_MODE_OUTPUT_PP;
+    if (strcmp(sw.pull, "up") == 0) 
+        conf.PULL = GPIO_PULLUP;
+    else if (strcmp(sw.pull, "down") == 0) 
+        conf.PULL = GPIO_PULLDOWN;
+    else 
+        conf.PULL = GPIO_NOPULL;
 
-    String pull = String(sw.pull);
-    if (pull == "up") conf.PULL = GPIO_PULLUP;
-    else if (pull == "down") conf.PULL = GPIO_PULLDOWN;
-    else conf.PULL = GPIO_NOPULL;
+    if (strcmp(sw.speed, "high") == 0) 
+        conf.SPEED = GPIO_SPEED_FREQ_HIGH;
+    else if (strcmp(sw.speed, "medium") == 0) 
+        conf.SPEED = GPIO_SPEED_FREQ_MEDIUM;
+    else 
+        conf.SPEED = GPIO_SPEED_FREQ_LOW;
 
-    String speed = String(sw.speed);
-    if (speed == "high") conf.SPEED = GPIO_SPEED_FREQ_HIGH;
-    else if (speed == "medium") conf.SPEED = GPIO_SPEED_FREQ_MEDIUM;
-    else conf.SPEED = GPIO_SPEED_FREQ_LOW;
+    conf.PIN  = LS_SW_PIN;
+    conf.PORT = LS_SW_PORT;
 
-    Serial1.println(F("LS_SW: Config Loaded from struct"));
+    Serial1.print(F("[LS_SW] Enabled: "));
+    Serial1.print(conf.ENABLE ? "1" : "0");
+    Serial1.print(F(", Inverted: "));
+    Serial1.print(conf.INVERTED ? "1" : "0");
+    Serial1.print(F(", Default: "));
+    Serial1.print(conf.DEFAULT_STATE == GPIO_PIN_SET ? "ON" : "OFF");
+    Serial1.print(F(", Mode: "));
+    Serial1.print(conf.MODE == GPIO_MODE_OUTPUT_OD ? "OPEN_DRAIN" : "PUSH_PULL");
+    Serial1.print(F(", Pull: "));
+    if (conf.PULL == GPIO_PULLUP) Serial1.print("UP");
+    else if (conf.PULL == GPIO_PULLDOWN) Serial1.print("DOWN");
+    else Serial1.print("NONE");
+    Serial1.print(F(", Speed: "));
+    if (conf.SPEED == GPIO_SPEED_FREQ_HIGH) Serial1.print("HIGH");
+    else if (conf.SPEED == GPIO_SPEED_FREQ_MEDIUM) Serial1.print("MEDIUM");
+    else Serial1.print("LOW");
+    Serial1.print(F(", Delay: "));
+    Serial1.print(conf.STARTUP_DELAY);
+    Serial1.println(" ms");
     return true;
 }
 

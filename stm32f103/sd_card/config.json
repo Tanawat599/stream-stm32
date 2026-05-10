@@ -11,6 +11,7 @@
       "frequency": 100000,
       "master_address": "0x08",
       "interval_ms": 2000,
+      "max_resp_ms": 1000,
       "max_retry": 3,
       "devices": [
         {
@@ -98,10 +99,7 @@
       "startup_delay_ms": 10
     },
     "sht3": {
-      "enable": true,
-      "sda": "PB7",
-      "scl": "PB6",
-      "address": "0x44"
+      "enable": true
     }
   },
   "logging": {

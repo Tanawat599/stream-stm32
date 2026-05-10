@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#define MAGIC_NUMBER 0xA1B2C3D6 // bumped to force factory reset after struct/layout changes
+#define MAGIC_NUMBER 0xA1B2C3D8 // bumped to force factory reset after struct/layout changes
 #define MAX_STR 32
 #define MIN_STR 16
 #define MAX_I2C_CHANNELS 2
@@ -49,6 +49,7 @@ struct I2CConfig {
     uint8_t master_address;
     uint32_t interval_ms;
     uint8_t max_retry;
+    uint32_t max_resp_ms;
     I2CDeviceCfg devices[1]; 
 };
 struct HardwareCfg {
@@ -112,6 +113,8 @@ struct CommCfg {
         uint8_t data_bits;
         uint8_t stop_bits;
         char parity[10];
+        char slaves[4][10];   
+        uint8_t slave_count;
     } rs485;
 };
 

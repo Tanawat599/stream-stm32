@@ -26,6 +26,7 @@ void ConfigManager::factoryReset() {
     config.hardware.i2c.frequency = 100000;
     config.hardware.i2c.master_address = 0x08;
     config.hardware.i2c.interval_ms = 2000;
+    config.hardware.i2c.max_resp_ms = 1000;
     config.hardware.i2c.max_retry = 3;
 
     config.hardware.i2c.devices[0].id = 1;
@@ -45,6 +46,13 @@ void ConfigManager::factoryReset() {
     config.hardware.oled.address = 0x3C;
     config.hardware.led.active_low = false;
 
+    // --- Hardware : Analog ---
+    config.hardware.analog.enable = true;
+    config.hardware.analog.scale_min = 4;
+    config.hardware.analog.scale_max = 20;
+    config.hardware.analog.factor_slope = 1.0;
+    config.hardware.analog.factor_intercept = 0.0;
+
     // --- Hardware : Modbus ---
     config.hardware.modbus_rs485.enable = true;
     config.hardware.modbus_rs485.baud_rate = 9600;
@@ -52,6 +60,8 @@ void ConfigManager::factoryReset() {
     config.hardware.modbus_rs485.stop_bit = 1;
     strcpy(config.hardware.modbus_rs485.parity, "NONE");
     config.hardware.modbus_rs485.interval_ms = 2000;
+    config.hardware.modbus_rs485.max_resp_ms = 1000;
+    config.hardware.modbus_rs485.max_retry = 3;
     
     config.hardware.modbus_rs485.channels[0].id = 1;
     strcpy(config.hardware.modbus_rs485.channels[0].name, "temperature");
@@ -60,6 +70,19 @@ void ConfigManager::factoryReset() {
     config.hardware.modbus_rs485.channels[0].quantity = 1;
     strcpy(config.hardware.modbus_rs485.channels[0].type, "HOLDING");
     strcpy(config.hardware.modbus_rs485.channels[0].byte_order, "AB");
+
+    // --- Ls Switch ---
+    config.hardware.ls_sw.enable = true;
+    config.hardware.ls_sw.inverted = false;
+    strcpy(config.hardware.ls_sw.default_state, "off");
+    strcpy(config.hardware.ls_sw.mode, "push_pull");
+    strcpy(config.hardware.ls_sw.pull, "none");
+    strcpy(config.hardware.ls_sw.speed, "low");
+    config.hardware.ls_sw.startup_delay_ms = 10;
+
+    // --- SHT3 ---
+    config.hardware.sht3.enable = true;
+    config.hardware.sht3.address = 0x44;
 
     // --- Logging & Comm ---
     config.logging.enabled = true;
@@ -86,6 +109,11 @@ void ConfigManager::factoryReset() {
     config.lora.lorawan.tx_adr = true;
     config.lora.lorawan.duty_cycle = true;
     config.lora.lorawan.fport = 2;
+    config.lora.lorawan.rx1_delay_ms = 500;
+    strcpy(config.lora.lorawan.rx1_data_rate, "DR5");
+    config.lora.lorawan.rx2_frequency = 923200000;
+    strcpy(config.lora.lorawan.rx2_data_rate, "DR2");
+    config.lora.lorawan.confirmed_uplink = false;
 
     strcpy(config.lora.lorawan.abp.dev_addr, "01b3bb05");
     strcpy(config.lora.lorawan.abp.nwk_skey, "9603718ec7d6a70fd78ab4daeb5c9224");
@@ -93,6 +121,8 @@ void ConfigManager::factoryReset() {
     
     strcpy(config.lora.lorawan.otaa.dev_eui, "C304DB83070E0063");
     strcpy(config.lora.lorawan.otaa.app_key, "28A77CA4837A951F42A2D7A31493043C");
+    strcpy(config.lora.lorawan.otaa.join_eui, "E63BA610B2498DBE");
+    strcpy(config.lora.lorawan.otaa.nwk_key, "28A77CA4837A951F42A2D7A31493043C");
 
     save();
 }

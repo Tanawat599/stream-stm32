@@ -324,7 +324,7 @@ struct MODBUS_CH {
     uint16_t ADDR;
     uint16_t QTY;
     MODBUS_TYPE TYPE;
-    MB_BYTE_ORDER ORDER; // 2. เปลี่ยนตรงนี้
+    MB_BYTE_ORDER ORDER; 
     bool SIGN;
 };
 
@@ -416,27 +416,6 @@ public:
     float getHumidity();
 };
 
-
-
-// struct DeviceConfig {
-//     uint32_t magic;       // ใช้เช็คว่า EEPROM เคยถูกเขียนหรือยัง
-//     DeviceInfoCfg device;
-//     HardwareCfg hardware;
-//     LoRaCfg lora;
-// };
-
-// // ================= CLASS MANAGER =================
-// class ConfigManager {
-// public:
-//     bool begin();
-//     bool save();
-//     DeviceConfig& get();
-//     void factoryReset();
-
-// private:
-//     DeviceConfig config;
-// };
-
 #define CLI_COLOR_RESET   "\x1b[0m"
 #define CLI_COLOR_RED     "\x1b[31m"
 #define CLI_COLOR_GREEN   "\x1b[32m"
@@ -478,6 +457,8 @@ private:
   void showDeviceConfig();
   void showLoRaConfig();
   void showHardwareConfig();
+  void showCommunicationConfig();
+  void showLoggingConfig();
 
   // System commands
   void rebootSystem();

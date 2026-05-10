@@ -67,7 +67,7 @@ void SerialCLI::processCommand(String cmdLine) {
     }
     cmd.toLowerCase();
 
-    if (cmd == "help") {
+    if (cmd == "help" || cmd == "h" || cmd == "?") {
         printHelp();
     } 
     else if (cmd == "show") {
@@ -315,7 +315,7 @@ void SerialCLI::handleSetLoRa(String key, String value) {
         printError("Unknown key in 'lora'. Check 'show lora' for available keys.");
     }
 }
-// ================= ระบบ SHOW แบบเลือกหมวดหมู่ =================
+// ================= SHOW CONFIG =================
 void SerialCLI::showConfig(String category) {
     category.toLowerCase();
     
@@ -325,7 +325,6 @@ void SerialCLI::showConfig(String category) {
         _serial->println(CLI_COLOR_BOLD "---------------------\n" CLI_COLOR_RESET);
         return;
     }
-
     if (category == "" || category == "all" || category == "device") {
         showDeviceConfig();
     }
@@ -334,6 +333,12 @@ void SerialCLI::showConfig(String category) {
     }
     if (category == "" || category == "all" || category == "hw") {
         showHardwareConfig();
+    }
+    if (category == "" || category == "all" || category == "comm" || category == "communication") {
+        showCommunicationConfig();
+    }
+    if (category == "" || category == "all" || category == "log" || category == "logging") {
+        showLoggingConfig();
     }
     _serial->println(CLI_COLOR_BOLD "---------------------\n" CLI_COLOR_RESET);
 }
@@ -376,15 +381,42 @@ void SerialCLI::showLoRaConfig() {
     // main settings
     _serial->printf("  %-22s : %s\n", "lora.enabled", cfg.lora.enabled ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "lora.region", cfg.lora.region[0] ? cfg.lora.region : CLI_COLOR_RED "(empty)" CLI_COLOR_RESET);
+    // LoRa pins
+    _serial->printf("  %-22s : SS=%s, RST=%s, DIO0=%s, DIO1=%s\n", "lora.pins", cfg.lora.pins_ss, cfg.lora.pins_rst, cfg.lora.pins_dio0, cfg.lora.pins_dio1);
+    
     _serial->printf("  %-22s : %s\n", "lora.lorawan.mode", cfg.lora.lorawan.mode[0] ? cfg.lora.lorawan.mode : CLI_COLOR_RED "(empty)" CLI_COLOR_RESET);
-    _serial->printf("  %-22s : %lu sec\n", "lora.lorawan.interval", cfg.lora.lorawan.uplink_interval_sec);
+    _serial->printf("  %-22s : %s\n", "lora.lorawan.class_type", cfg.lora.lorawan.class_type);
+    if (cfg.lora.lorawan.class_type[0] == 'C') {
+        _serial->printf("  %-22s : %s\n", "lora.class_c_continuous_rx", cfg.lora.lorawan.class_c_continuous_rx ? "Yes" : "No");
+    } else if (cfg.lora.lorawan.class_type[0] == 'A') {
+        _serial->printf("  %-22s : %lu ms\n", "lora.class_a.rx1_delay_ms", cfg.lora.lorawan.rx1_delay_ms);
+        _serial->printf("  %-22s : %s\n", "lora.class_a.rx1_data_rate", cfg.lora.lorawan.rx1_data_rate);
+        // uplink_interval_min ต้องมีใน struct ด้วย ถ้ามี
+        #ifdef HAS_UPLINK_INTERVAL_MIN
+        _serial->printf("  %-22s : %lu sec\n", "lora.class_a.uplink_interval_min", cfg.lora.lorawan.uplink_interval_min);
+        #endif
+    }
+    _serial->printf("  %-22s : %lu sec\n", "lora.lorawan.uplink_interval_sec", cfg.lora.lorawan.uplink_interval_sec);
+    
+    // RX2
+    _serial->printf("  %-22s : %lu Hz\n", "lora.rx2.frequency", cfg.lora.lorawan.rx2_frequency);
+    _serial->printf("  %-22s : %s\n", "lora.rx2.data_rate", cfg.lora.lorawan.rx2_data_rate);
+    
+    // TX parameters
+    _serial->printf("  %-22s : SF=%d, Power=%d dBm, ADR=%s\n", "lora.tx", 
+        cfg.lora.lorawan.tx_sf, cfg.lora.lorawan.tx_power,
+        cfg.lora.lorawan.tx_adr ? "ON" : "OFF");
+    _serial->printf("  %-22s : %s\n", "lora.lorawan.confirmed_uplink", cfg.lora.lorawan.confirmed_uplink ? "Yes" : "No");
+    _serial->printf("  %-22s : %d\n", "lora.lorawan.fport", cfg.lora.lorawan.fport);
+    _serial->printf("  %-22s : %s\n", "lora.lorawan.duty_cycle", cfg.lora.lorawan.duty_cycle ? "Enabled" : "Disabled");
 
     // OTAA Keys
     _serial->println(CLI_COLOR_YELLOW "  --- OTAA Keys ---" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "lora.otaa.join_eui", cfg.lora.lorawan.otaa.join_eui[0] ? cfg.lora.lorawan.otaa.join_eui : "(not set)");
     _serial->printf("  %-22s : %s\n", "lora.otaa.dev_eui", cfg.lora.lorawan.otaa.dev_eui[0] ? cfg.lora.lorawan.otaa.dev_eui : "(not set)");
+    _serial->printf("  %-22s : %s\n", "lora.otaa.nwk_key", cfg.lora.lorawan.otaa.nwk_key[0] ? cfg.lora.lorawan.otaa.nwk_key : "(not set)");
     _serial->printf("  %-22s : %s\n", "lora.otaa.app_key", cfg.lora.lorawan.otaa.app_key[0] ? cfg.lora.lorawan.otaa.app_key : "(not set)");
-
+    
     // ABP Keys
     _serial->println(CLI_COLOR_YELLOW "  --- ABP Keys ---" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "lora.abp.dev_addr", cfg.lora.lorawan.abp.dev_addr[0] ? cfg.lora.lorawan.abp.dev_addr : "(not set)");
@@ -395,21 +427,136 @@ void SerialCLI::showLoRaConfig() {
 void SerialCLI::showHardwareConfig() {
     DeviceConfig& cfg = _cfgMgr->get();
     
-    // I2C
+    // ========== I2C (existing, but add missing fields) ==========
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - I2C]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.i2c.enable", cfg.hardware.i2c.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %lu Hz\n", "hw.i2c.freq", cfg.hardware.i2c.frequency);
     _serial->printf("  %-22s : 0x%02X\n", "hw.i2c.master_address", cfg.hardware.i2c.master_address); 
     _serial->printf("  %-22s : %lu ms\n", "hw.i2c.interval", cfg.hardware.i2c.interval_ms);
+    _serial->printf("  %-22s : %lu ms\n", "hw.i2c.max_resp_ms", cfg.hardware.i2c.max_resp_ms);   // เพิ่ม
     _serial->printf("  %-22s : %d\n", "hw.i2c.max_retry", cfg.hardware.i2c.max_retry);
+    
+    // I2C Devices & Channels (เพิ่ม)
+    for (int d = 0; d < 20; d++) {
+        if (cfg.hardware.i2c.devices[d].id == 0) break;
+        _serial->printf("  I2C Device #%d: id=%d, name=%s, addr=0x%02X\n", d+1,
+            cfg.hardware.i2c.devices[d].id,
+            cfg.hardware.i2c.devices[d].name,
+            cfg.hardware.i2c.devices[d].address);
+        for (int ch = 0; ch < MAX_I2C_CHANNELS; ch++) {
+            if (cfg.hardware.i2c.devices[d].channels[ch].id == 0) break;
+            _serial->printf("    Channel #%d: %s, reg=0x%02X, len=%d, order=%s, scale=%.2f\n",
+                cfg.hardware.i2c.devices[d].channels[ch].id,
+                cfg.hardware.i2c.devices[d].channels[ch].name,
+                cfg.hardware.i2c.devices[d].channels[ch].reg_addr,
+                cfg.hardware.i2c.devices[d].channels[ch].length,
+                cfg.hardware.i2c.devices[d].channels[ch].byte_order,
+                cfg.hardware.i2c.devices[d].channels[ch].scale);
+        }
+    }
 
-    // Modbus
+    // ========== OLED ==========
+    _serial->println(CLI_COLOR_CYAN "\n[Hardware - OLED]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.oled.enabled", cfg.hardware.oled.enabled ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : 0x%02X\n", "hw.oled.address", cfg.hardware.oled.address);
+    
+    // ========== LED ==========
+    _serial->println(CLI_COLOR_CYAN "\n[Hardware - LED]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.led.active_low", cfg.hardware.led.active_low ? "Yes" : "No");
+    
+    // ========== Analog Input ==========
+    _serial->println(CLI_COLOR_CYAN "\n[Hardware - Analog Input]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.analog.enable", cfg.hardware.analog.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    if (cfg.hardware.analog.enable) {
+        _serial->printf("  %-22s : %.1f - %.1f mA\n", "hw.analog.scale", cfg.hardware.analog.scale_min, cfg.hardware.analog.scale_max);
+        _serial->printf("  %-22s : y = %.2f * x + %.2f\n", "hw.analog.factor", cfg.hardware.analog.factor_slope, cfg.hardware.analog.factor_intercept);
+    }
+    
+    // ========== LS_SW (Digital Output) ==========
+    _serial->println(CLI_COLOR_CYAN "\n[Hardware - LS_SW]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.ls_sw.enable", cfg.hardware.ls_sw.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    if (cfg.hardware.ls_sw.enable) {
+        _serial->printf("  %-22s : %s\n", "hw.ls_sw.inverted", cfg.hardware.ls_sw.inverted ? "Yes" : "No");
+        _serial->printf("  %-22s : %s\n", "hw.ls_sw.default_state", cfg.hardware.ls_sw.default_state);
+        _serial->printf("  %-22s : %s\n", "hw.ls_sw.mode", cfg.hardware.ls_sw.mode);
+        _serial->printf("  %-22s : %s\n", "hw.ls_sw.pull", cfg.hardware.ls_sw.pull);
+        _serial->printf("  %-22s : %s\n", "hw.ls_sw.speed", cfg.hardware.ls_sw.speed);
+        _serial->printf("  %-22s : %lu ms\n", "hw.ls_sw.startup_delay_ms", cfg.hardware.ls_sw.startup_delay_ms);
+    }
+    
+    // ========== SHT3 Sensor ==========
+    _serial->println(CLI_COLOR_CYAN "\n[Hardware - SHT3]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.sht3.enable", cfg.hardware.sht3.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    if (cfg.hardware.sht3.enable) {
+        _serial->printf("  %-22s : %s (SDA), %s (SCL)\n", "hw.sht3.pins", cfg.hardware.sht3.sda, cfg.hardware.sht3.scl);
+        _serial->printf("  %-22s : 0x%02X\n", "hw.sht3.address", cfg.hardware.sht3.address);
+    }
+    
+    // ========== Modbus RS485 (เพิ่มส่วนที่ขาด) ==========
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - Modbus RS485]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.modbus.enable", cfg.hardware.modbus_rs485.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
-    _serial->printf("  %-22s : %lu\n", "hw.modbus.baud_rate", cfg.hardware.modbus_rs485.baud_rate);
-    _serial->printf("  %-22s : %s\n", "hw.modbus.parity", cfg.hardware.modbus_rs485.parity[0] ? cfg.hardware.modbus_rs485.parity : "(not set)");
+    if (cfg.hardware.modbus_rs485.enable) {
+        _serial->printf("  %-22s : %lu\n", "hw.modbus.baud_rate", cfg.hardware.modbus_rs485.baud_rate);
+        _serial->printf("  %-22s : %d\n", "hw.modbus.data_bit", cfg.hardware.modbus_rs485.data_bit);
+        _serial->printf("  %-22s : %d\n", "hw.modbus.stop_bit", cfg.hardware.modbus_rs485.stop_bit);
+        _serial->printf("  %-22s : %s\n", "hw.modbus.parity", cfg.hardware.modbus_rs485.parity);
+        _serial->printf("  %-22s : %lu ms\n", "hw.modbus.interval_ms", cfg.hardware.modbus_rs485.interval_ms);
+        _serial->printf("  %-22s : %lu ms\n", "hw.modbus.max_resp_ms", cfg.hardware.modbus_rs485.max_resp_ms);   // เพิ่ม
+        _serial->printf("  %-22s : %d\n", "hw.modbus.max_retry", cfg.hardware.modbus_rs485.max_retry);           // เพิ่ม
+        
+        // Modbus Channels
+        for (int ch = 0; ch < MAX_MODBUS_CHANNELS; ch++) {
+            if (cfg.hardware.modbus_rs485.channels[ch].id == 0) break;
+            _serial->printf("    Channel #%d: %s, slave=%d, addr=%d, qty=%d, type=%s, order=%s, sign=%s\n",
+                cfg.hardware.modbus_rs485.channels[ch].id,
+                cfg.hardware.modbus_rs485.channels[ch].name,
+                cfg.hardware.modbus_rs485.channels[ch].slave_id,
+                cfg.hardware.modbus_rs485.channels[ch].address,
+                cfg.hardware.modbus_rs485.channels[ch].quantity,
+                cfg.hardware.modbus_rs485.channels[ch].type,
+                cfg.hardware.modbus_rs485.channels[ch].byte_order,
+                cfg.hardware.modbus_rs485.channels[ch].sign ? "true" : "false");
+        }
+    }
+}
+void SerialCLI::showCommunicationConfig() {
+    DeviceConfig& cfg = _cfgMgr->get();
+    _serial->println(CLI_COLOR_CYAN "\n[Communication Settings]" CLI_COLOR_RESET);
+    
+    // Serial
+    _serial->println(CLI_COLOR_YELLOW "  --- Serial ---" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "comm.serial.port", cfg.communication.serial.port);
+    _serial->printf("  %-22s : %lu baud\n", "comm.serial.baud", cfg.communication.serial.baud);
+    _serial->printf("  %-22s : %lu ms\n", "comm.serial.timeout", cfg.communication.serial.timeout);
+    
+    // RS485
+    _serial->println(CLI_COLOR_YELLOW "  --- RS485 ---" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "comm.rs485.port", cfg.communication.rs485.port);
+    _serial->printf("  %-22s : %lu baud\n", "comm.rs485.baud", cfg.communication.rs485.baud);
+    _serial->printf("  %-22s : %lu ms\n", "comm.rs485.timeout", cfg.communication.rs485.timeout);
+    _serial->printf("  %-22s : %d bits\n", "comm.rs485.data_bits", cfg.communication.rs485.data_bits);
+    _serial->printf("  %-22s : %d bits\n", "comm.rs485.stop_bits", cfg.communication.rs485.stop_bits);
+    _serial->printf("  %-22s : %s\n", "comm.rs485.parity", cfg.communication.rs485.parity);
+    
+    // // RS485 slaves 
+    // #ifdef HAS_RS485_SLAVES
+    // _serial->printf("  %-22s : ", "comm.rs485.slaves");
+    // for (uint8_t i = 0; i < cfg.communication.rs485.slave_count; i++) {
+    //     if (i > 0) _serial->print(", ");
+    //     _serial->print(cfg.communication.rs485.slaves[i]);
+    // }
+    // if (cfg.communication.rs485.slave_count == 0) _serial->print("(none)");
+    // _serial->println();
+    // #endif
 }
 
+void SerialCLI::showLoggingConfig() {
+    DeviceConfig& cfg = _cfgMgr->get();
+    _serial->println(CLI_COLOR_CYAN "\n[Logging Settings]" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "logging.enabled", cfg.logging.enabled ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "logging.level", cfg.logging.level);
+    _serial->printf("  %-22s : %s\n", "logging.sd_log", cfg.logging.sd_log ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+}
 // ================= SYSTEM COMMANDS =================
 void SerialCLI::printHelp() {
     _serial->println(CLI_COLOR_BOLD "\nAvailable Commands:" CLI_COLOR_RESET);

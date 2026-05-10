@@ -174,6 +174,7 @@ void setup() {
             i2cMaster.master_begin();
         }
         if (modbus_rs485Enabled) modbus_rs485.loadConfigFromStruct(cfg.hardware);
+        //ls_swEnabled = true;
         if (ls_swEnabled) {
             ls.loadConfigFromStruct(cfg.hardware);
             ls.begin();
