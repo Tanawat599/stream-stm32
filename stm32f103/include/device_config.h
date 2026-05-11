@@ -1,10 +1,11 @@
 #pragma once
 
 #include <Arduino.h>
-#define MAGIC_NUMBER 0xA1B2C3D8 // bumped to force factory reset after struct/layout changes
+#define MAGIC_NUMBER 0xA1B2C3D8 
 #define MAX_STR 32
 #define MIN_STR 16
-#define MAX_I2C_CHANNELS 2
+#define MAX_I2C_CHANNELS 8
+#define MAX_I2C_DEVICES   8
 #define MAX_MODBUS_CHANNELS 2
 
 // ================= DEVICE =================

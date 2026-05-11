@@ -37,7 +37,7 @@ void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTa
 }
 
 const char* SDResourceManager::getConfig() {
-    static char result[32];  // buffer คงที่
+    static char result[32];  
 
     File root = SD.open("/");
     if (!root) {

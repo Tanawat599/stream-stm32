@@ -1,12 +1,11 @@
 #include "mylib.h"
 
-
 MODBUS_RS485::MODBUS_RS485(HardwareSerial* PORT, uint8_t DE_PIN, uint8_t RE_PIN) {
     _SERIAL = PORT;
     _DE_PIN = DE_PIN;
     _RE_PIN = RE_PIN;
     CH_COUNT = 0;
-    for (int i = 0; i < 32; i++) CH_DATA[i] = 0;
+    for (int i = 0; i < MAX_MODBUS_CHANNELS; i++) CH_DATA[i] = 0;
 }
 
 void MODBUS_RS485::INIT(RS485_CONF CONF) {
@@ -17,25 +16,39 @@ void MODBUS_RS485::INIT(RS485_CONF CONF) {
     pinMode(_RE_PIN, OUTPUT);
     RX_EN();
 
-    uint32_t MODE = SERIAL_8N1;
-    if (CFG.PARITY == MB_PARITY_NONE && CFG.STOP == 1) MODE = SERIAL_8N1;
-    if (CFG.PARITY == MB_PARITY_NONE && CFG.STOP == 2) MODE = SERIAL_8N2;
-    if (CFG.PARITY == MB_PARITY_EVEN && CFG.STOP == 1) MODE = SERIAL_8E1;
-    if (CFG.PARITY == MB_PARITY_EVEN && CFG.STOP == 2) MODE = SERIAL_8E2;
-    if (CFG.PARITY == MB_PARITY_ODD && CFG.STOP == 1) MODE = SERIAL_8O1;
-    if (CFG.PARITY == MB_PARITY_ODD && CFG.STOP == 2) MODE = SERIAL_8O2;
+    uint32_t MODE;
+    uint8_t data_bits = CFG.DATA;
+    
+    if (data_bits == 7) {
+        Serial1.println(F("[MODBUS] Warning: 7 data bits not fully supported, using 8 data bits instead."));
+        data_bits = 8;
+    }
+    
+    if (data_bits == 8) {
+        if (CFG.PARITY == MB_PARITY_NONE && CFG.STOP == 1) MODE = SERIAL_8N1;
+        else if (CFG.PARITY == MB_PARITY_NONE && CFG.STOP == 2) MODE = SERIAL_8N2;
+        else if (CFG.PARITY == MB_PARITY_EVEN && CFG.STOP == 1) MODE = SERIAL_8E1;
+        else if (CFG.PARITY == MB_PARITY_EVEN && CFG.STOP == 2) MODE = SERIAL_8E2;
+        else if (CFG.PARITY == MB_PARITY_ODD && CFG.STOP == 1) MODE = SERIAL_8O1;
+        else if (CFG.PARITY == MB_PARITY_ODD && CFG.STOP == 2) MODE = SERIAL_8O2;
+        else MODE = SERIAL_8N1; // fallback
+    } else {
+
+        Serial1.println(F("[MODBUS] Error: Unsupported data bits, using 8N1"));
+        MODE = SERIAL_8N1;
+    }
 
     _SERIAL->begin(CFG.BAUD, MODE);
 }
 
 void MODBUS_RS485::ADD_CH(MODBUS_CH CH) {
-    if (CH_COUNT < 32) {
+    if (CH_COUNT < MAX_MODBUS_CHANNELS) {
         CH_LIST[CH_COUNT] = CH;
         CH_COUNT++;
     }
 }
 
-uint32_t MODBUS_RS485::GET_DATA(uint8_t ID) {
+int32_t MODBUS_RS485::GET_DATA(uint8_t ID) {
     for (uint8_t I = 0; I < CH_COUNT; I++) {
         if (CH_LIST[I].CH_ID == ID) return CH_DATA[I];
     }
@@ -50,56 +63,51 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
     bool FOUND = false;
 
     for (uint8_t I = 0; I < CH_COUNT; I++) {
-        if (CH_LIST[I].CH_ID == ID) { 
-            TARGET = CH_LIST[I]; 
-            TARGET_IDX = I; 
-            FOUND = true; 
-            break; 
+        if (CH_LIST[I].CH_ID == ID) {
+            TARGET = CH_LIST[I];
+            TARGET_IDX = I;
+            FOUND = true;
+            break;
         }
     }
     if (!FOUND) return false;
 
     uint8_t REQ[8];
-    REQ[0] = TARGET.SLAVE; 
-    REQ[1] = TARGET.TYPE; 
+    REQ[0] = TARGET.SLAVE;
+    REQ[1] = TARGET.TYPE;
     REQ[2] = TARGET.ADDR >> 8;
-    REQ[3] = TARGET.ADDR & 0xFF; 
-    REQ[4] = TARGET.QTY >> 8; 
+    REQ[3] = TARGET.ADDR & 0xFF;
+    REQ[4] = TARGET.QTY >> 8;
     REQ[5] = TARGET.QTY & 0xFF;
 
     uint16_t calc_crc = CALC_CRC16(REQ, 6);
-    REQ[6] = calc_crc & 0xFF; 
+    REQ[6] = calc_crc & 0xFF;
     REQ[7] = calc_crc >> 8;
 
     uint8_t RETRY = 0;
     bool SUCCESS = false;
-
-    uint8_t EXPECTED_LEN = 3 + (TARGET.QTY * 2) + 2; 
+    uint8_t EXPECTED_LEN = 3 + (TARGET.QTY * 2) + 2;
 
     while (RETRY < CFG.MAX_RETRY && !SUCCESS) {
-        
         while (_SERIAL->available()) _SERIAL->read();
 
         TX_EN();
         _SERIAL->write(REQ, 8);
         _SERIAL->flush();
-        
-        delay(2); 
-        
+        delay(2); // หน่วงให้ slave เตรียมตอบ
+
         RX_EN();
 
         uint32_t START = millis();
         Serial1.printf("MODBUS [ID:%d]: Wait %d bytes... ", TARGET.SLAVE, EXPECTED_LEN);
-        
+
         while (millis() - START < CFG.MAX_RESP) {
-            
             if (_SERIAL->available() >= EXPECTED_LEN) {
-                
                 uint8_t RESP[64];
                 _SERIAL->readBytes(RESP, EXPECTED_LEN);
 
                 Serial1.print("Got -> ");
-                for(int i = 0; i < EXPECTED_LEN; i++) {
+                for (int i = 0; i < EXPECTED_LEN; i++) {
                     Serial1.print(RESP[i], HEX); Serial1.print(" ");
                 }
                 Serial1.println();
@@ -109,28 +117,24 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
 
                 if (RESP[0] == TARGET.SLAVE && RECV_CRC == COMP_CRC) {
                     Serial1.println("MODBUS: CRC MATCH! Data Valid.");
-                    
                     uint8_t BYTE_COUNT = RESP[2];
                     uint8_t* PAYLOAD = &RESP[3];
-                    
-                    CH_DATA[TARGET_IDX] = APPLY_BYTE_ORDER(PAYLOAD, BYTE_COUNT, TARGET.ORDER);
+                    CH_DATA[TARGET_IDX] = APPLY_BYTE_ORDER(PAYLOAD, BYTE_COUNT, TARGET.ORDER, TARGET.SIGN);
                     SUCCESS = true;
                 } else {
                     Serial1.println("MODBUS: FAILED! CRC or ID Mismatch.");
                 }
-                
-                break; 
+                break;
             }
         }
 
         if (!SUCCESS) {
             Serial1.println("MODBUS: TIMEOUT or Error. Retrying...");
             RETRY++;
-            if (RETRY < CFG.MAX_RETRY) delay(200); 
+            if (RETRY < CFG.MAX_RETRY) delay(200);
         }
     }
-    
-    // หน่วงเวลาก่อนเริ่มคำสั่งถัดไป ตามที่ตั้งใน Config
+
     delay(CFG.INTERVAL);
     return SUCCESS;
 }
@@ -141,27 +145,36 @@ void MODBUS_RS485::FETCH_ALL() {
     }
 }
 
-uint32_t MODBUS_RS485::APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER) {
-    uint32_t RESULT = 0;
+int32_t MODBUS_RS485::APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER, bool SIGN) {
+    uint32_t raw = 0;
 
-    if (LEN == 2) { 
+    if (LEN == 2) {
         switch (ORDER) {
-            case BO_AB: RESULT = (PAYLOAD[0] << 8) | PAYLOAD[1]; break;
-            case BO_BA: RESULT = (PAYLOAD[1] << 8) | PAYLOAD[0]; break;
-            default:    RESULT = (PAYLOAD[0] << 8) | PAYLOAD[1]; break;
+            case BO_AB: raw = (PAYLOAD[0] << 8) | PAYLOAD[1]; break;
+            case BO_BA: raw = (PAYLOAD[1] << 8) | PAYLOAD[0]; break;
+            default:    raw = (PAYLOAD[0] << 8) | PAYLOAD[1]; break;
         }
-    } 
-    else if (LEN == 4) { 
+        if (SIGN) {
+            int16_t val = (int16_t)raw;
+            return (int32_t)val;
+        }
+        return (int32_t)raw;
+    }
+    else if (LEN == 4) {
         uint32_t b0 = PAYLOAD[0], b1 = PAYLOAD[1], b2 = PAYLOAD[2], b3 = PAYLOAD[3];
         switch (ORDER) {
-            case BO_ABCD: RESULT = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3; break;
-            case BO_CDBA: RESULT = (b2 << 24) | (b3 << 16) | (b0 << 8) | b1; break;
-            case BO_BADC: RESULT = (b1 << 24) | (b0 << 16) | (b3 << 8) | b2; break;
-            case BO_DCBA: RESULT = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0; break;
-            default:      RESULT = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3; break;
+            case BO_ABCD: raw = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3; break;
+            case BO_CDBA: raw = (b2 << 24) | (b3 << 16) | (b0 << 8) | b1; break;
+            case BO_BADC: raw = (b1 << 24) | (b0 << 16) | (b3 << 8) | b2; break;
+            case BO_DCBA: raw = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0; break;
+            default:      raw = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3; break;
         }
+        if (SIGN) {
+            return (int32_t)raw;
+        }
+        return (int32_t)raw;
     }
-    return RESULT;
+    return 0;
 }
 
 uint16_t MODBUS_RS485::CALC_CRC16(uint8_t* BUF, uint8_t LEN) {
@@ -180,13 +193,13 @@ uint16_t MODBUS_RS485::CALC_CRC16(uint8_t* BUF, uint8_t LEN) {
     return crc_val;
 }
 
-void MODBUS_RS485::TX_EN() { 
-    digitalWrite(_DE_PIN, HIGH); 
-    digitalWrite(_RE_PIN, HIGH); 
+void MODBUS_RS485::TX_EN() {
+    digitalWrite(_DE_PIN, HIGH);
+    digitalWrite(_RE_PIN, HIGH);
 }
-void MODBUS_RS485::RX_EN() { 
-    digitalWrite(_DE_PIN, LOW); 
-    digitalWrite(_RE_PIN, LOW); 
+void MODBUS_RS485::RX_EN() {
+    digitalWrite(_DE_PIN, LOW);
+    digitalWrite(_RE_PIN, LOW);
 }
 
 uint8_t MODBUS_RS485::GET_CH_COUNT() {
@@ -197,14 +210,13 @@ MODBUS_CH* MODBUS_RS485::GET_CH(uint8_t index) {
     if (index >= CH_COUNT) return nullptr;
     return &CH_LIST[index];
 }
-uint32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
+
+int32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
     if (index >= CH_COUNT) return 0;
     return CH_DATA[index];
 }
+
 bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
-
-    
-
     RS485_CONF conf;
     conf.ENABLE    = rs485["enable"] | false;
     conf.BAUD      = rs485["baud_rate"] | 9600;
@@ -214,9 +226,9 @@ bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
     conf.MAX_RESP  = rs485["max_resp_ms"] | 1000;
     conf.MAX_RETRY = rs485["max_retry"] | 3;
 
-    String parityStr = rs485["parity"] | "NONE";
-    if (parityStr == "ODD") conf.PARITY = MB_PARITY_ODD;
-    else if (parityStr == "EVEN") conf.PARITY = MB_PARITY_EVEN;
+    const char* parityStr = rs485["parity"] | "NONE";
+    if (strcmp(parityStr, "ODD") == 0) conf.PARITY = MB_PARITY_ODD;
+    else if (strcmp(parityStr, "EVEN") == 0) conf.PARITY = MB_PARITY_EVEN;
     else conf.PARITY = MB_PARITY_NONE;
 
     this->INIT(conf);
@@ -233,18 +245,18 @@ bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
             m_ch.QTY   = ch["quantity"] | 1;
             m_ch.SIGN  = ch["sign"] | false;
 
-            String typeStr = ch["type"] | "HOLDING";
-            if (typeStr == "COIL") m_ch.TYPE = MB_COIL;
-            else if (typeStr == "DISCRETE") m_ch.TYPE = MB_DISCRETE;
-            else if (typeStr == "INPUT") m_ch.TYPE = MB_INPUT;
+            const char* typeStr = ch["type"] | "HOLDING";
+            if (strcmp(typeStr, "COIL") == 0) m_ch.TYPE = MB_COIL;
+            else if (strcmp(typeStr, "DISCRETE") == 0) m_ch.TYPE = MB_DISCRETE;
+            else if (strcmp(typeStr, "INPUT") == 0) m_ch.TYPE = MB_INPUT;
             else m_ch.TYPE = MB_HOLDING;
 
-            String orderStr = ch["byte_order"] | "AB";
-            if (orderStr == "BA") m_ch.ORDER = BO_BA;
-            else if (orderStr == "ABCD") m_ch.ORDER = BO_ABCD;
-            else if (orderStr == "CDBA") m_ch.ORDER = BO_CDBA;
-            else if (orderStr == "BADC") m_ch.ORDER = BO_BADC;
-            else if (orderStr == "DCBA") m_ch.ORDER = BO_DCBA;
+            const char* orderStr = ch["byte_order"] | "AB";
+            if (strcmp(orderStr, "BA") == 0) m_ch.ORDER = BO_BA;
+            else if (strcmp(orderStr, "ABCD") == 0) m_ch.ORDER = BO_ABCD;
+            else if (strcmp(orderStr, "CDBA") == 0) m_ch.ORDER = BO_CDBA;
+            else if (strcmp(orderStr, "BADC") == 0) m_ch.ORDER = BO_BADC;
+            else if (strcmp(orderStr, "DCBA") == 0) m_ch.ORDER = BO_DCBA;
             else m_ch.ORDER = BO_AB;
 
             if (this->CH_COUNT >= MAX_MODBUS_CHANNELS) {
@@ -271,12 +283,10 @@ bool MODBUS_RS485::loadConfigFromJson(const JsonObject& rs485) {
         Serial1.println(this->CH_COUNT);
         Serial1.println();
     }
-    
-    return true; 
+    return true;
 }
 
 bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
-    // Map HardwareCfg -> RS485_CONF
     RS485_CONF conf;
     conf.ENABLE   = hw.modbus_rs485.enable;
     conf.BAUD     = hw.modbus_rs485.baud_rate;
@@ -286,14 +296,13 @@ bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
     conf.MAX_RESP = hw.modbus_rs485.max_resp_ms;
     conf.MAX_RETRY= hw.modbus_rs485.max_retry;
 
-    String parityStr = String(hw.modbus_rs485.parity);
-    if (parityStr == "ODD") conf.PARITY = MB_PARITY_ODD;
-    else if (parityStr == "EVEN") conf.PARITY = MB_PARITY_EVEN;
+    const char* parityStr = hw.modbus_rs485.parity;
+    if (strcmp(parityStr, "ODD") == 0) conf.PARITY = MB_PARITY_ODD;
+    else if (strcmp(parityStr, "EVEN") == 0) conf.PARITY = MB_PARITY_EVEN;
     else conf.PARITY = MB_PARITY_NONE;
 
     this->INIT(conf);
 
-    // Load channels from struct array
     for (int i = 0; i < MAX_MODBUS_CHANNELS; i++) {
         const ModbusChannelCfg& ch = hw.modbus_rs485.channels[i];
         if (ch.id == 0) continue;
@@ -306,17 +315,17 @@ bool MODBUS_RS485::loadConfigFromStruct(const HardwareCfg& hw) {
         m_ch.QTY   = ch.quantity;
         m_ch.SIGN  = ch.sign;
 
-        String typeStr = String(ch.type);
-        if (typeStr == "COIL") m_ch.TYPE = MB_COIL;
-        else if (typeStr == "INPUT") m_ch.TYPE = MB_INPUT;
+        const char* typeStr = ch.type;
+        if (strcmp(typeStr, "COIL") == 0) m_ch.TYPE = MB_COIL;
+        else if (strcmp(typeStr, "INPUT") == 0) m_ch.TYPE = MB_INPUT;
         else m_ch.TYPE = MB_HOLDING;
 
-        String orderStr = String(ch.byte_order);
-        if (orderStr == "BA") m_ch.ORDER = BO_BA;
-        else if (orderStr == "ABCD") m_ch.ORDER = BO_ABCD;
-        else if (orderStr == "CDBA") m_ch.ORDER = BO_CDBA;
-        else if (orderStr == "BADC") m_ch.ORDER = BO_BADC;
-        else if (orderStr == "DCBA") m_ch.ORDER = BO_DCBA;
+        const char* orderStr = ch.byte_order;
+        if (strcmp(orderStr, "BA") == 0) m_ch.ORDER = BO_BA;
+        else if (strcmp(orderStr, "ABCD") == 0) m_ch.ORDER = BO_ABCD;
+        else if (strcmp(orderStr, "CDBA") == 0) m_ch.ORDER = BO_CDBA;
+        else if (strcmp(orderStr, "BADC") == 0) m_ch.ORDER = BO_BADC;
+        else if (strcmp(orderStr, "DCBA") == 0) m_ch.ORDER = BO_DCBA;
         else m_ch.ORDER = BO_AB;
 
         if (this->CH_COUNT >= MAX_MODBUS_CHANNELS) {

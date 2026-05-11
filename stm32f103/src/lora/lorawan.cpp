@@ -489,7 +489,6 @@ void LoRaWan::loop(const char* payload) {
             
             size_t idx = 0;
             for (size_t i = 0; i < len; i++) {
-                // ปริ้นต์ลง Serial Monitor
                 if (buf[i] < 0x10) Serial1.print('0');
                 Serial1.print(buf[i], HEX); Serial1.print(" ");
 

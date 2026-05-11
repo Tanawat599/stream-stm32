@@ -8,26 +8,32 @@
 #include <SD.h>
 #include <ArduinoJson.h>
 #include <stdint.h>
-// Global runtime flag (defined in main.cpp)
-extern bool isLogging;
 #include <vector>
 #include <Adafruit_SHTC3.h>
 #include "device_config.h"
 #include <EEPROM.h>
+#include <RadioLib.h>
 
+extern bool isLogging;
 
 // ===================== LoRa P2P =====================
 class LoRaP2P {
 public:
-  void begin(float frequency);
-  void loadConfig(class SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
-  void send(const char* msg);
-  void sendBytes(uint8_t* data, size_t len);
+  LoRaP2P();
+  int16_t begin(float frequency);
 
-  String receive();
-  int receiveBytes(uint8_t* buffer, size_t len);
+  // send helpers
+  int16_t send(const char* msg);
+  int16_t sendBytes(const uint8_t* data, size_t len);
+
+  // receive helpers
+  String receive(uint32_t timeout = 1000);
+  int16_t receiveBytes(uint8_t* buffer, size_t len, uint32_t timeout = 1000);
+
+private:
+  Module module;
+  SX1278 radio;
 };
-
 // ===================== LoRa WAN =====================
 
 
@@ -58,6 +64,9 @@ private:
   char downlinkText[256];
   bool hasNewDownlink = false;
 };
+
+// ===================== SD Resource Manager =====================
+
 class SDResourceManager {
 public:
     SDResourceManager(uint8_t mosi, uint8_t miso, uint8_t sck, uint8_t cs);
@@ -84,6 +93,9 @@ private:
     String _loraKey;
     int _pin;
 };
+
+// ===================== Logger =====================
+
 class Logger {
 private:
     SDResourceManager* _sd;
@@ -96,21 +108,6 @@ public:
     void logMixed(const char* type, const char* message, int count, ...);
 };
 // ===================== Display =====================
-// class Display {
-// public:
-//   void begin(uint8_t address);
-
-//   void clear();
-//   void setCursor(uint8_t x, uint8_t y);
-
-//   void print(const char* msg);
-//   void printAt(uint8_t x, uint8_t y, const char* msg);
-
-//   void update();
-
-// private:
-//   class Adafruit_SSD1306* _display; // forward declaration
-// };
 class OLED {
 public:
     void begin();
@@ -185,7 +182,7 @@ private:
     static volatile int _idx;
     static void receiveEvent(int howMany);
     static void requestEvent();
-
+    uint32_t _max_resp_ms;
     static volatile uint8_t _currentRegister; 
     static uint8_t _registers[16]; 
     void resetInternalConfig();
@@ -301,21 +298,23 @@ private:
 // ===================== RS485 =====================
 class SDResourceManager;
 
-// เติม Prefix เพื่อป้องกันการชนกับ Macro ของระบบ
 enum PARITY_OPT { MB_PARITY_NONE = 0, MB_PARITY_ODD, MB_PARITY_EVEN };
 enum MODBUS_TYPE { MB_COIL = 1, MB_DISCRETE = 2, MB_HOLDING = 3, MB_INPUT = 4 };
 enum MB_BYTE_ORDER { BO_AB = 0, BO_BA, BO_ABCD, BO_CDBA, BO_BADC, BO_DCBA };
 
 struct RS485_CONF {
     bool ENABLE;
-    uint8_t STOP;
-    uint8_t DATA;
-    PARITY_OPT PARITY;
     uint32_t BAUD;
+    uint8_t STOP;
+    uint8_t DATA;        
     uint32_t INTERVAL;
     uint32_t MAX_RESP;
     uint8_t MAX_RETRY;
+    uint8_t PARITY;      
 };
+#ifndef MAX_MODBUS_CHANNELS
+#define MAX_MODBUS_CHANNELS 32
+#endif
 
 struct MODBUS_CH {
     uint8_t CH_ID;
@@ -335,10 +334,10 @@ public:
     void ADD_CH(MODBUS_CH CH);
     bool FETCH(uint8_t ID);
     void FETCH_ALL();
-    uint32_t GET_DATA(uint8_t ID);
+    int32_t GET_DATA(uint8_t ID);                   
     uint8_t GET_CH_COUNT();
     MODBUS_CH* GET_CH(uint8_t index);
-    uint32_t GET_DATA_BY_INDEX(uint8_t index);
+    int32_t GET_DATA_BY_INDEX(uint8_t index);        
     bool loadConfigFromJson(const JsonObject& rs485);
     bool loadConfigFromStruct(const HardwareCfg& hw);
 
@@ -347,15 +346,16 @@ private:
     uint8_t _DE_PIN;
     uint8_t _RE_PIN;
     RS485_CONF CFG;
-    MODBUS_CH CH_LIST[32];
-    uint32_t CH_DATA[32];
+    MODBUS_CH CH_LIST[MAX_MODBUS_CHANNELS];   
+    int32_t CH_DATA[MAX_MODBUS_CHANNELS];     
     uint8_t CH_COUNT;
 
     uint16_t CALC_CRC16(uint8_t* BUF, uint8_t LEN);
-    uint32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER);
+    int32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER, bool SIGN);
     void TX_EN();
     void RX_EN();
 };
+
 
 extern "C" {
   #include "stm32f1xx_hal.h"
@@ -372,6 +372,8 @@ typedef struct {
     uint32_t SPEED;
     uint32_t STARTUP_DELAY;
 } LS_CONF;
+
+// ===================== Low Side Switch =====================
 
 class LowSideSwitch {
 private:
@@ -422,6 +424,8 @@ public:
 #define CLI_COLOR_YELLOW  "\x1b[33m"
 #define CLI_COLOR_CYAN    "\x1b[36m"
 #define CLI_COLOR_BOLD    "\x1b[1m"
+
+// ===================== Serial CLI =====================
 
 class SerialCLI {
 public:

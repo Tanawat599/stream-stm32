@@ -140,6 +140,27 @@ void SerialCLI::processCommand(String cmdLine) {
         if (nDevices == 0) _serial->println("No I2C devices found\n");
         else _serial->println("done\n");
     }
+    else if (cmd == "sd.config" || cmd == "sd.showconfig") {
+        if (!_sd) { printError("SD not available"); }
+        else {
+            const char* cfgName = _sd->getConfig();
+            _serial->printf("Config file: %s\n", cfgName);
+            String content = _sd->readFile(cfgName);
+            if (content == "ERROR_OPEN") {
+                printError("Cannot open config file");
+            } else {
+                DynamicJsonDocument doc(4096);
+                DeserializationError err = deserializeJson(doc, content);
+                if (err) {
+                    _serial->println("JSON parse error, showing raw content:");
+                    _serial->println(content);
+                } else {
+                    serializeJsonPretty(doc, *_serial);
+                    _serial->println();
+                }
+            }
+        }
+    }
     else {
         printError("Unknown command.");
     }
@@ -391,7 +412,6 @@ void SerialCLI::showLoRaConfig() {
     } else if (cfg.lora.lorawan.class_type[0] == 'A') {
         _serial->printf("  %-22s : %lu ms\n", "lora.class_a.rx1_delay_ms", cfg.lora.lorawan.rx1_delay_ms);
         _serial->printf("  %-22s : %s\n", "lora.class_a.rx1_data_rate", cfg.lora.lorawan.rx1_data_rate);
-        // uplink_interval_min ต้องมีใน struct ด้วย ถ้ามี
         #ifdef HAS_UPLINK_INTERVAL_MIN
         _serial->printf("  %-22s : %lu sec\n", "lora.class_a.uplink_interval_min", cfg.lora.lorawan.uplink_interval_min);
         #endif
@@ -566,6 +586,13 @@ void SerialCLI::printHelp() {
     _serial->println("  " CLI_COLOR_YELLOW "save" CLI_COLOR_RESET "                          : Save to EEPROM");
     _serial->println("  " CLI_COLOR_YELLOW "factory-reset" CLI_COLOR_RESET "                 : Reset all config");
     _serial->println("  " CLI_COLOR_YELLOW "reboot" CLI_COLOR_RESET "                        : Restart system\n");
+    _serial->println("  " CLI_COLOR_YELLOW "sd.config" CLI_COLOR_RESET "                     : Show config from SD card");
+     _serial->println("  " CLI_COLOR_YELLOW "sd.list" CLI_COLOR_RESET "                       : List files on SD card");
+     _serial->println("  " CLI_COLOR_YELLOW "sd.read <path>" CLI_COLOR_RESET "                 : Read file from SD card");
+     _serial->println("  " CLI_COLOR_YELLOW "uplink <payload>" CLI_COLOR_RESET "                 : Send LoRa uplink");
+     _serial->println("  " CLI_COLOR_YELLOW "toggle" CLI_COLOR_RESET "                    : Toggle LS Switch (if available)");
+     _serial->println("  " CLI_COLOR_YELLOW "i2c scan" CLI_COLOR_RESET "                    : Scan I2C bus for devices");
+     _serial->println();
 }
 
 void SerialCLI::rebootSystem() {
