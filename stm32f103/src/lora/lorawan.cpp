@@ -507,6 +507,7 @@ void LoRaWan::loop(const char* payload) {
             Serial1.println(F("============================"));
         }
     }
+    Serial1.println(F("\n=================="));
 } 
 
 

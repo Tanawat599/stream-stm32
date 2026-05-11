@@ -11,7 +11,7 @@ I2C i2cMaster;
 MODBUS_RS485 modbus_rs485(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
 OLED oled;
 MySHTC3 sht(&Wire, PB7, PB6);
-
+Analog420 analog;
 ConfigManager cfgMgr;
 SerialCLI cli;
 
@@ -95,7 +95,7 @@ void setup() {
         Serial1.println("[WARN] SD init failed, forced to use EEPROM.");
         cfg.device.use_sd_config = false;
     }
-
+    //cfg.device.use_sd_config = true;
     // =========================================================
     //                BRANCH CONFIG SOURCE
     // =========================================================
@@ -155,7 +155,12 @@ void setup() {
                 while (1);
             }
             Serial1.println("SHTC3 init success");
-    }
+        }
+        if (analogEnabled) {
+            JsonObject analog_json = hw["analog"].as<JsonObject>();
+            analog.loadConfigFromJson(analog_json);
+            analog.begin();
+        }
         lorawan.loadConfig(lora);
 
     } 
@@ -168,16 +173,34 @@ void setup() {
         ls_swEnabled        = cfg.hardware.ls_sw.enable;
         ledEnabled          = cfg.hardware.led.active_low;
         sht3Enabled         = cfg.hardware.sht3.enable;
-
+        analogEnabled       = cfg.hardware.analog.enable;
+        //i2cEnabled = false;
         if (i2cEnabled) {
             i2cMaster.loadConfig((const I2CConfig&)cfg.hardware.i2c);
             i2cMaster.master_begin();
         }
         if (modbus_rs485Enabled) modbus_rs485.loadConfigFromStruct(cfg.hardware);
-        //ls_swEnabled = true;
         if (ls_swEnabled) {
             ls.loadConfigFromStruct(cfg.hardware);
             ls.begin();
+        }
+        if (oledEnabled) {
+            oled.begin();
+            oled.clear();
+            oled.setFont(u8g2_font_5x7_tr);
+            oled.print("Booting...", 0, 10);
+            oled.update();
+        }
+        if (sht3Enabled) {
+            if (!sht.begin()) {
+                Serial1.println("SHTC3 init failed");
+                while (1);
+            }
+            Serial1.println("SHTC3 init success");
+        }
+        if (analogEnabled) {
+            analog.loadConfigFromStruct(cfg.hardware);
+            analog.begin();
         }
         lorawan.loadConfigFromStruct(cfg.lora);
         
@@ -213,15 +236,14 @@ void setup() {
     lorawan.begin();
 
     Serial1.println("[SYSTEM] Ready. Press ANY KEY to enter CLI.");
-    cli.printPrompt(); // พิมพ์ Prompt ขึ้นมารอรับคำสั่ง
+    cli.printPrompt(); 
 }
 void loop() {
-    // Detect serial input to pause logging and enter CLI mode
+
     if (isLogging && Serial1.available() > 0) {
         isLogging = false; 
         delay(10); 
         
-        // Clear remaining characters in serial buffer to prevent ghost commands
         while(Serial1.available()) { Serial1.read(); } 
 
         Serial1.println("\n\x1b[33m=========================================\x1b[0m");
@@ -231,11 +253,9 @@ void loop() {
         cli.printPrompt();
     }
 
-    // Process CLI commands (Sensors & LoRa are paused)
     if (!isLogging) {
         cli.update();
     } 
-    // Normal operation mode (Execute every 100ms without blocking)
     else {
         if (millis() - lastMainLoop >= 100) {
             lastMainLoop = millis();
@@ -276,6 +296,13 @@ void loop() {
                 shtData["hum"]  = serialized(String(sht.getHumidity(), 2));
             }
 
+            // ===== Read Analog Sensor =====
+            if (analogEnabled) {
+                displayText += " Analog ";
+                JsonObject analogData = payloadDoc.createNestedObject("analog");
+                analogData["v"] = serialized(String(analog.readVoltage(), 2));
+                analogData["mA"] = serialized(String(analog.readCurrent(), 1));
+            }
             // ===== Read Battery & Charging Status =====
             JsonObject batData = payloadDoc.createNestedObject("bat");
             batData["v"]  = serialized(String(readBatteryVoltage(), 2));
@@ -296,7 +323,6 @@ void loop() {
                 int len = strlen(downlink_payload);
                 if (downlink_payload != nullptr && len >= 2) {
                     
-                    // Parse command code (First byte)
                     char cmdStr[3] = {downlink_payload[0], downlink_payload[1], '\0'};
                     uint8_t command = strtol(cmdStr, NULL, 16); 
 
@@ -325,7 +351,6 @@ void loop() {
                                 char textBuffer[32] = {0}; 
                                 int textIdx = 0;
                                 
-                                // Parse Hex string to ASCII characters
                                 for (int i = 2; i < len && textIdx < 31; i += 2) {
                                     char hexChar[3] = {downlink_payload[i], downlink_payload[i+1], '\0'};
                                     textBuffer[textIdx++] = (char)strtol(hexChar, NULL, 16);

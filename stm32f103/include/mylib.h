@@ -265,27 +265,14 @@ private:
 
 
 // ================= ANALOG =================
-struct Analog420Config {
-  int pin;
-  float adcResolution;
-  float vref;
-
-  float shuntResistor;
-  float minCurrent;
-  float maxCurrent;
-
-  float outMin;
-  float outMax;
-
-  float multiplier;
-};
 
 class Analog420 {
 public:
   Analog420();
 
-  void begin(Analog420Config cfg);
-
+  void begin();
+  void loadConfigFromStruct(const HardwareCfg& hw);
+  void loadConfigFromJson(const JsonObject& analog);
   float readCurrent();
   float readVoltage();
   float readRaw();

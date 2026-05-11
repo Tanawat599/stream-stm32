@@ -139,17 +139,21 @@ bool LowSideSwitch::loadConfigFromStruct(const HardwareCfg& hw) {
     Serial1.println(" ms");
     return true;
 }
-
 void LowSideSwitch::begin()
 {
     if (!conf.ENABLE) return;
+
+    if (conf.STARTUP_DELAY > 10000) {
+        Serial1.printf("[LS_SW] WARNING: STARTUP_DELAY=%lu ms too high, reducing to 5000 ms\n", conf.STARTUP_DELAY);
+        conf.STARTUP_DELAY = 5000;
+    }
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = conf.PIN;
+    GPIO_InitStruct.Pin = conf.PIN;    
     GPIO_InitStruct.Mode = conf.MODE;
     GPIO_InitStruct.Pull = conf.PULL;
     GPIO_InitStruct.Speed = conf.SPEED;

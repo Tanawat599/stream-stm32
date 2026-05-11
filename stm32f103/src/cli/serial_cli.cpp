@@ -116,7 +116,27 @@ void SerialCLI::processCommand(String cmdLine) {
     else if (cmd == "save") {
         _cfgMgr->save();
         printSuccess("Config saved to EEPROM.");
-    } 
+        _serial->println("Reboot now to apply changes? (y/n)");
+        
+        while (_serial->available()) _serial->read();
+        
+        uint32_t start = millis();
+        while (millis() - start < 5000) {
+            if (_serial->available()) {
+                char c = _serial->read();
+                if (c == 'y' || c == 'Y') {
+                    _serial->println("\nRebooting...");
+                    delay(100);
+                    rebootSystem();
+                    return; 
+                } else if (c == 'n' || c == 'N') {
+                    _serial->println("\nReboot cancelled.");
+                    return;
+                }
+            }
+        }
+        _serial->println("\nNo response, reboot cancelled.");
+    }
     else if (cmd == "factory-reset") {
         factoryReset();
     } 
@@ -237,15 +257,46 @@ void SerialCLI::handleSetDevice(String key, String value) {
 void SerialCLI::handleSetHardware(String key, String value) {
     DeviceConfig& cfg = _cfgMgr->get();
     
-    // I2C Settings
-    if (key == "i2c.enable") {
-        cfg.hardware.i2c.enable = (value == "1" || value == "true");
-        printSuccess("Updated hw.i2c.enable");
-    } else if (key == "i2c.frequency") {
-        cfg.hardware.i2c.frequency = value.toInt();
-        printSuccess("Updated hw.i2c.frequency");
+    if (key.startsWith("i2c.")) {
+        String field = key.substring(4); 
+        bool success = true;
+
+        if (field == "enable") {
+            cfg.hardware.i2c.enable = (value == "1" || value.equalsIgnoreCase("true"));
+        }
+        else if (field == "frequency" || field == "freq") {
+            cfg.hardware.i2c.frequency = value.toInt();
+        }
+        else if (field == "interval_ms" || field == "interval") {
+            cfg.hardware.i2c.interval_ms = value.toInt();
+        }
+        else if (field == "master_address") {
+            int addr = strtol(value.c_str(), NULL, 0);
+            if (addr >= 0 && addr <= 127) cfg.hardware.i2c.master_address = (uint8_t)addr;
+            else success = false;
+        }
+        else if (field == "max_resp_ms") {
+            cfg.hardware.i2c.max_resp_ms = value.toInt();
+        }
+        else if (field == "max_retry") {
+            int retry = value.toInt();
+            if (retry >= 0 && retry <= 255) cfg.hardware.i2c.max_retry = (uint8_t)retry;
+            else success = false;
+        }
+        else {
+            _serial->print("DEBUG field: '"); _serial->print(field); _serial->println("'");
+            printError("Unknown key in 'i2c'. Use: enable, frequency, interval_ms, master_address, max_resp_ms, max_retry");
+            return;
+        }
+
+        if (success) {
+            _cfgMgr->save();
+            _serial->printf("i2c.%s set to %s\n", field.c_str(), value.c_str());
+        } else {
+            printError("Invalid value");
+        }
+        return;
     }
-    // Modbus RS485 Settings
     else if (key == "modbus.enable") {
         cfg.hardware.modbus_rs485.enable = (value == "1" || value == "true");
         printSuccess("Updated hw.modbus.enable");
@@ -443,56 +494,63 @@ void SerialCLI::showLoRaConfig() {
     _serial->printf("  %-22s : %s\n", "lora.abp.nwk_skey", cfg.lora.lorawan.abp.nwk_skey[0] ? cfg.lora.lorawan.abp.nwk_skey : "(not set)");
     _serial->printf("  %-22s : %s\n", "lora.abp.app_skey", cfg.lora.lorawan.abp.app_skey[0] ? cfg.lora.lorawan.abp.app_skey : "(not set)");
 }
-
 void SerialCLI::showHardwareConfig() {
     DeviceConfig& cfg = _cfgMgr->get();
     
-    // ========== I2C (existing, but add missing fields) ==========
+    // ========== I2C ==========
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - I2C]" CLI_COLOR_RESET);
-    _serial->printf("  %-22s : %s\n", "hw.i2c.enable", cfg.hardware.i2c.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
+    _serial->printf("  %-22s : %s\n", "hw.i2c.enable", cfg.hardware.i2c.enable ? "Yes" : "No");
     _serial->printf("  %-22s : %lu Hz\n", "hw.i2c.freq", cfg.hardware.i2c.frequency);
-    _serial->printf("  %-22s : 0x%02X\n", "hw.i2c.master_address", cfg.hardware.i2c.master_address); 
+    _serial->printf("  %-22s : 0x%02X\n", "hw.i2c.master_address", cfg.hardware.i2c.master_address);
     _serial->printf("  %-22s : %lu ms\n", "hw.i2c.interval", cfg.hardware.i2c.interval_ms);
-    _serial->printf("  %-22s : %lu ms\n", "hw.i2c.max_resp_ms", cfg.hardware.i2c.max_resp_ms);   // เพิ่ม
+    _serial->printf("  %-22s : %lu ms\n", "hw.i2c.max_resp_ms", cfg.hardware.i2c.max_resp_ms);
     _serial->printf("  %-22s : %d\n", "hw.i2c.max_retry", cfg.hardware.i2c.max_retry);
-    
-    // I2C Devices & Channels (เพิ่ม)
-    for (int d = 0; d < 20; d++) {
-        if (cfg.hardware.i2c.devices[d].id == 0) break;
+
+    const size_t maxDev = sizeof(cfg.hardware.i2c.devices) / sizeof(cfg.hardware.i2c.devices[0]);
+    for (size_t d = 0; d < maxDev; d++) {
+        if (cfg.hardware.i2c.devices[d].id == 0) continue;
         _serial->printf("  I2C Device #%d: id=%d, name=%s, addr=0x%02X\n", d+1,
             cfg.hardware.i2c.devices[d].id,
             cfg.hardware.i2c.devices[d].name,
             cfg.hardware.i2c.devices[d].address);
-        for (int ch = 0; ch < MAX_I2C_CHANNELS; ch++) {
-            if (cfg.hardware.i2c.devices[d].channels[ch].id == 0) break;
-            _serial->printf("    Channel #%d: %s, reg=0x%02X, len=%d, order=%s, scale=%.2f\n",
+        const size_t maxCh = sizeof(cfg.hardware.i2c.devices[d].channels) / sizeof(cfg.hardware.i2c.devices[d].channels[0]);
+        for (size_t ch = 0; ch < maxCh; ch++) {
+            if (cfg.hardware.i2c.devices[d].channels[ch].id == 0) continue;
+            char scaleBuf[10];
+            dtostrf(cfg.hardware.i2c.devices[d].channels[ch].scale, 5, 2, scaleBuf);
+            _serial->printf("    Channel #%d: %s, reg=0x%02X, len=%d, order=%s, scale=%s\n",
                 cfg.hardware.i2c.devices[d].channels[ch].id,
                 cfg.hardware.i2c.devices[d].channels[ch].name,
                 cfg.hardware.i2c.devices[d].channels[ch].reg_addr,
                 cfg.hardware.i2c.devices[d].channels[ch].length,
                 cfg.hardware.i2c.devices[d].channels[ch].byte_order,
-                cfg.hardware.i2c.devices[d].channels[ch].scale);
+                scaleBuf);
         }
     }
 
-    // ========== OLED ==========
+    // OLED
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - OLED]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.oled.enabled", cfg.hardware.oled.enabled ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     _serial->printf("  %-22s : 0x%02X\n", "hw.oled.address", cfg.hardware.oled.address);
     
-    // ========== LED ==========
+    // LED
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - LED]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.led.active_low", cfg.hardware.led.active_low ? "Yes" : "No");
     
-    // ========== Analog Input ==========
+    // Analog Input
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - Analog Input]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.analog.enable", cfg.hardware.analog.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     if (cfg.hardware.analog.enable) {
-        _serial->printf("  %-22s : %.1f - %.1f mA\n", "hw.analog.scale", cfg.hardware.analog.scale_min, cfg.hardware.analog.scale_max);
-        _serial->printf("  %-22s : y = %.2f * x + %.2f\n", "hw.analog.factor", cfg.hardware.analog.factor_slope, cfg.hardware.analog.factor_intercept);
+        char minBuf[8], maxBuf[8], slopeBuf[8], interBuf[8];
+        dtostrf(cfg.hardware.analog.scale_min, 4, 1, minBuf);
+        dtostrf(cfg.hardware.analog.scale_max, 4, 1, maxBuf);
+        dtostrf(cfg.hardware.analog.factor_slope, 5, 2, slopeBuf);
+        dtostrf(cfg.hardware.analog.factor_intercept, 5, 2, interBuf);
+        _serial->printf("  %-22s : %s - %s mA\n", "hw.analog.scale", minBuf, maxBuf);
+        _serial->printf("  %-22s : y = %s * x + %s\n", "hw.analog.factor", slopeBuf, interBuf);
     }
     
-    // ========== LS_SW (Digital Output) ==========
+    // LS_SW
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - LS_SW]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.ls_sw.enable", cfg.hardware.ls_sw.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     if (cfg.hardware.ls_sw.enable) {
@@ -504,15 +562,14 @@ void SerialCLI::showHardwareConfig() {
         _serial->printf("  %-22s : %lu ms\n", "hw.ls_sw.startup_delay_ms", cfg.hardware.ls_sw.startup_delay_ms);
     }
     
-    // ========== SHT3 Sensor ==========
+    // SHT3
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - SHT3]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.sht3.enable", cfg.hardware.sht3.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     if (cfg.hardware.sht3.enable) {
-        _serial->printf("  %-22s : %s (SDA), %s (SCL)\n", "hw.sht3.pins", cfg.hardware.sht3.sda, cfg.hardware.sht3.scl);
         _serial->printf("  %-22s : 0x%02X\n", "hw.sht3.address", cfg.hardware.sht3.address);
     }
     
-    // ========== Modbus RS485 (เพิ่มส่วนที่ขาด) ==========
+    // Modbus RS485
     _serial->println(CLI_COLOR_CYAN "\n[Hardware - Modbus RS485]" CLI_COLOR_RESET);
     _serial->printf("  %-22s : %s\n", "hw.modbus.enable", cfg.hardware.modbus_rs485.enable ? CLI_COLOR_GREEN "Yes" CLI_COLOR_RESET : CLI_COLOR_RED "No" CLI_COLOR_RESET);
     if (cfg.hardware.modbus_rs485.enable) {
@@ -521,12 +578,11 @@ void SerialCLI::showHardwareConfig() {
         _serial->printf("  %-22s : %d\n", "hw.modbus.stop_bit", cfg.hardware.modbus_rs485.stop_bit);
         _serial->printf("  %-22s : %s\n", "hw.modbus.parity", cfg.hardware.modbus_rs485.parity);
         _serial->printf("  %-22s : %lu ms\n", "hw.modbus.interval_ms", cfg.hardware.modbus_rs485.interval_ms);
-        _serial->printf("  %-22s : %lu ms\n", "hw.modbus.max_resp_ms", cfg.hardware.modbus_rs485.max_resp_ms);   // เพิ่ม
-        _serial->printf("  %-22s : %d\n", "hw.modbus.max_retry", cfg.hardware.modbus_rs485.max_retry);           // เพิ่ม
+        _serial->printf("  %-22s : %lu ms\n", "hw.modbus.max_resp_ms", cfg.hardware.modbus_rs485.max_resp_ms);
+        _serial->printf("  %-22s : %d\n", "hw.modbus.max_retry", cfg.hardware.modbus_rs485.max_retry);
         
-        // Modbus Channels
         for (int ch = 0; ch < MAX_MODBUS_CHANNELS; ch++) {
-            if (cfg.hardware.modbus_rs485.channels[ch].id == 0) break;
+            if (cfg.hardware.modbus_rs485.channels[ch].id == 0) continue;
             _serial->printf("    Channel #%d: %s, slave=%d, addr=%d, qty=%d, type=%s, order=%s, sign=%s\n",
                 cfg.hardware.modbus_rs485.channels[ch].id,
                 cfg.hardware.modbus_rs485.channels[ch].name,

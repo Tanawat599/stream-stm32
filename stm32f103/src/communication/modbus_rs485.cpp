@@ -94,45 +94,44 @@ bool MODBUS_RS485::FETCH(uint8_t ID) {
         TX_EN();
         _SERIAL->write(REQ, 8);
         _SERIAL->flush();
-        delay(2); // หน่วงให้ slave เตรียมตอบ
-
+        delay(2);
         RX_EN();
 
         uint32_t START = millis();
-        Serial1.printf("MODBUS [ID:%d]: Wait %d bytes... ", TARGET.SLAVE, EXPECTED_LEN);
 
         while (millis() - START < CFG.MAX_RESP) {
             if (_SERIAL->available() >= EXPECTED_LEN) {
                 uint8_t RESP[64];
                 _SERIAL->readBytes(RESP, EXPECTED_LEN);
 
-                Serial1.print("Got -> ");
-                for (int i = 0; i < EXPECTED_LEN; i++) {
-                    Serial1.print(RESP[i], HEX); Serial1.print(" ");
-                }
-                Serial1.println();
-
                 uint16_t RECV_CRC = (uint16_t)RESP[EXPECTED_LEN - 2] | ((uint16_t)RESP[EXPECTED_LEN - 1] << 8);
                 uint16_t COMP_CRC = CALC_CRC16(RESP, EXPECTED_LEN - 2);
 
                 if (RESP[0] == TARGET.SLAVE && RECV_CRC == COMP_CRC) {
-                    Serial1.println("MODBUS: CRC MATCH! Data Valid.");
                     uint8_t BYTE_COUNT = RESP[2];
                     uint8_t* PAYLOAD = &RESP[3];
                     CH_DATA[TARGET_IDX] = APPLY_BYTE_ORDER(PAYLOAD, BYTE_COUNT, TARGET.ORDER, TARGET.SIGN);
                     SUCCESS = true;
                 } else {
-                    Serial1.println("MODBUS: FAILED! CRC or ID Mismatch.");
+                    Serial1.printf("[MODBUS] 0x%02X: CRC/ID mismatch (retry %d/%d)\n",
+                                   TARGET.SLAVE, RETRY + 1, CFG.MAX_RETRY);
                 }
-                break;
+                break; 
             }
         }
 
         if (!SUCCESS) {
-            Serial1.println("MODBUS: TIMEOUT or Error. Retrying...");
+            // Timeout
+            Serial1.printf("[MODBUS] 0x%02X: timeout %lu ms (retry %d/%d)\n",
+                           TARGET.SLAVE, millis() - START, RETRY + 1, CFG.MAX_RETRY);
             RETRY++;
             if (RETRY < CFG.MAX_RETRY) delay(200);
         }
+    }
+
+    if (!SUCCESS) {
+        Serial1.printf("[MODBUS] FAILED to read 0x%02X after %d retries\n",
+                       TARGET.SLAVE, CFG.MAX_RETRY);
     }
 
     delay(CFG.INTERVAL);

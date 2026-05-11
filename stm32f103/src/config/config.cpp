@@ -1,16 +1,29 @@
 #include "mylib.h"
 #include "device_config.h"
 #include <EEPROM.h>
+
+#define EEPROM_SIZE  4096
+
 bool ConfigManager::begin() {
-    EEPROM.begin(); 
+    EEPROM.begin();
     EEPROM.get(0, config);
 
     if (config.magic != MAGIC_NUMBER) {
+        Serial1.println(F("[CONFIG] Magic mismatch, factory resetting..."));
         factoryReset();
+        save();
         return false;
     }
+    if (config.lora.lorawan.uplink_interval_sec > 86400) {  
+        Serial1.println(F("[CONFIG] Invalid interval, factory reset again"));
+        factoryReset();
+        save();
+        return false;
+    }
+
     return true;
 }
+
 void ConfigManager::factoryReset() {
     memset(&config, 0, sizeof(DeviceConfig));
     config.magic = MAGIC_NUMBER;

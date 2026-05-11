@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#define MAGIC_NUMBER 0xA1B2C3D8 
+#define MAGIC_NUMBER 0x5A6B7C2D
 #define MAX_STR 32
 #define MIN_STR 16
 #define MAX_I2C_CHANNELS 8
@@ -53,6 +53,17 @@ struct I2CConfig {
     uint32_t max_resp_ms;
     I2CDeviceCfg devices[1]; 
 };
+
+struct Analog420Config {
+    bool enable = true;
+    float scale_min = 4.0;         // 4-20 mA
+    float scale_max = 20.0;
+    float factor_slope = 1.0;
+    float factor_intercept = 0.0;
+    float adc_resolution = 4095.0; // 12-bit default
+    float vref = 3.3;
+    float shunt_resistor = 150.0;
+};
 struct HardwareCfg {
     I2CConfig i2c;
 
@@ -60,13 +71,7 @@ struct HardwareCfg {
     struct { bool enabled; uint8_t address; } oled;
     struct { bool active_low; } led;
     
-    struct {
-        bool enable;
-        float scale_min;
-        float scale_max;
-        float factor_slope;
-        float factor_intercept;
-    } analog;
+    Analog420Config analog;
 
     struct {
         bool enable;
