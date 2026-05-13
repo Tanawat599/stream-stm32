@@ -237,7 +237,6 @@ const char* I2C::master_loop() {
 
     return payload;
 }
-
 bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_t len) {
     uint32_t startTime = millis();
     for (int r = 0; r < _max_retry && (millis() - startTime) < _max_resp_ms; r++) {
@@ -251,7 +250,13 @@ bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_
                 for (uint8_t i = 0; i < len; i++) {
                     buffer[i] = Wire.read();
                 }
-                return true;  // success, no print
+                // Success: print read data in same style as error messages
+                Serial1.printf("[I2C] 0x%02X: reg 0x%02X -> read %d bytes: ", devAddr, regAddr, len);
+                for (uint8_t i = 0; i < len; i++) {
+                    Serial1.printf("%02X ", buffer[i]);
+                }
+                Serial1.printf("(retry %d/%d)\n", r+1, _max_retry);
+                return true;
             } else {
                 // concise error: expected vs got bytes
                 Serial1.printf("[I2C] 0x%02X: reg 0x%02X -> got %d/%d bytes (retry %d/%d)\n",

@@ -58,12 +58,16 @@ float Analog420::readRaw() {
 // ================= VOLTAGE =================
 float Analog420::readVoltage() {
     float raw = readRaw();
+    Serial1.print(F("[Analog] Raw ADC: "));
+    Serial1.println(raw);
     return (raw / _cfg.adc_resolution) * _cfg.vref;
 }
 
 // ================= CURRENT (mA) =================
 float Analog420::readCurrent() {
     float voltage = readVoltage();
+    Serial1.print(F("[Analog] Voltage across shunt: "));
+    Serial1.println(voltage);
     return (voltage / _cfg.shunt_resistor) * 1000.0;
 }
 

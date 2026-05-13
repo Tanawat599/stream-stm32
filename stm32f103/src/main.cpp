@@ -257,7 +257,7 @@ void loop() {
         cli.update();
     } 
     else {
-        if (millis() - lastMainLoop >= 100) {
+        if (millis() - lastMainLoop >= 200) {
             lastMainLoop = millis();
 
             memset(main_payload, 0, sizeof(main_payload));
@@ -378,3 +378,29 @@ void loop() {
         }
     }
 }
+// #include <Arduino.h>
+// #include "mylib.h"
+
+// I2C i2cSlave;
+
+// const uint8_t SLAVE_ADDRESS = 0x40; 
+
+// void setup() {
+//     Serial1.begin(115200);
+//     delay(2000); 
+
+//     Serial1.println(F("\n============================="));
+//     Serial1.println(F("   I2C SLAVE SENSOR START  "));
+//     Serial1.println(F("============================="));
+
+//     i2cSlave.slave_begin(SLAVE_ADDRESS);
+    
+//     Serial1.print(F("Listening for Master on Address: 0x"));
+//     Serial1.println(SLAVE_ADDRESS, HEX);
+// }
+
+// void loop() {
+//     i2cSlave.slave_loop();
+    
+//     delay(10);
+// }

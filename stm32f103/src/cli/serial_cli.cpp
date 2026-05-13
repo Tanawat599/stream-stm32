@@ -257,57 +257,276 @@ void SerialCLI::handleSetDevice(String key, String value) {
 void SerialCLI::handleSetHardware(String key, String value) {
     DeviceConfig& cfg = _cfgMgr->get();
     
+// ---------- I2C Configuration (base + devices/channels) ----------
     if (key.startsWith("i2c.")) {
-        String field = key.substring(4); 
-        bool success = true;
+        if (key.indexOf("device[") != -1) {
+            int devOpen = key.indexOf('[');
+            int devClose = key.indexOf(']', devOpen);
+            if (devOpen == -1 || devClose == -1) {
+                printError("Invalid I2C device format. Use i2c.device[<idx>].<field>");
+                return;
+            }
+            String devIdxStr = key.substring(devOpen + 1, devClose);
+            int devIdx = devIdxStr.toInt();
+            if (devIdx < 0 || devIdx >= MAX_I2C_DEVICES) {
+                printError("Device index out of range");
+                return;
+            }
 
-        if (field == "enable") {
-            cfg.hardware.i2c.enable = (value == "1" || value.equalsIgnoreCase("true"));
-        }
-        else if (field == "frequency" || field == "freq") {
-            cfg.hardware.i2c.frequency = value.toInt();
-        }
-        else if (field == "interval_ms" || field == "interval") {
-            cfg.hardware.i2c.interval_ms = value.toInt();
-        }
-        else if (field == "master_address") {
-            int addr = strtol(value.c_str(), NULL, 0);
-            if (addr >= 0 && addr <= 127) cfg.hardware.i2c.master_address = (uint8_t)addr;
-            else success = false;
-        }
-        else if (field == "max_resp_ms") {
-            cfg.hardware.i2c.max_resp_ms = value.toInt();
-        }
-        else if (field == "max_retry") {
-            int retry = value.toInt();
-            if (retry >= 0 && retry <= 255) cfg.hardware.i2c.max_retry = (uint8_t)retry;
-            else success = false;
-        }
-        else {
-            _serial->print("DEBUG field: '"); _serial->print(field); _serial->println("'");
-            printError("Unknown key in 'i2c'. Use: enable, frequency, interval_ms, master_address, max_resp_ms, max_retry");
+            String afterDev = key.substring(devClose + 1);
+            if (afterDev.length() == 0) {
+                printError("Missing field after device index");
+                return;
+            }
+            if (afterDev[0] == '.') afterDev = afterDev.substring(1);
+
+            if (afterDev.startsWith("channel[")) {
+                int chOpen = afterDev.indexOf('[');
+                int chClose = afterDev.indexOf(']', chOpen);
+                if (chOpen == -1 || chClose == -1) {
+                    printError("Invalid channel format. Use i2c.device[<idx>].channel[<ch_idx>].<field>");
+                    return;
+                }
+                String chIdxStr = afterDev.substring(chOpen + 1, chClose);
+                int chIdx = chIdxStr.toInt();
+                if (chIdx < 0 || chIdx >= MAX_I2C_CHANNELS) {
+                    printError("Channel index out of range");
+                    return;
+                }
+                String field = afterDev.substring(chClose + 1);
+                if (field.length() == 0 || field[0] != '.') {
+                    printError("Missing field name after channel index");
+                    return;
+                }
+                field = field.substring(1);
+
+                I2CChannelCfg& ch = cfg.hardware.i2c.devices[devIdx].channels[chIdx];
+
+                if (field == "name") {
+                    strncpy(ch.name, value.c_str(), sizeof(ch.name) - 1);
+                    ch.name[sizeof(ch.name) - 1] = '\0';
+                    String msg = "i2c.device[" + devIdxStr + "].channel[" + chIdxStr + "].name = " + value;
+                    printSuccess(msg.c_str());
+                }
+                else if (field == "reg_addr" || field == "reg") {
+                    int addr = strtol(value.c_str(), NULL, 0);
+                    if (addr >= 0 && addr <= 0xFF) {
+                        ch.reg_addr = (uint8_t)addr;
+                        String msg = "i2c.device[" + devIdxStr + "].channel[" + chIdxStr + "].reg_addr = 0x" + String(addr, HEX);
+                        printSuccess(msg.c_str());
+                    } else {
+                        printError("Register address must be 0x00-0xFF");
+                    }
+                }
+                else if (field == "length") {
+                    int len = value.toInt();
+                    if (len >= 1 && len <= 4) {
+                        ch.length = (uint8_t)len;
+                        String msg = "i2c.device[" + devIdxStr + "].channel[" + chIdxStr + "].length = " + value;
+                        printSuccess(msg.c_str());
+                    } else {
+                        printError("Length must be 1-4 bytes");
+                    }
+                }
+                else if (field == "byte_order") {
+                    String upVal = value;
+                    upVal.toUpperCase();
+                    if (upVal == "AB" || upVal == "BA" || upVal == "ABCD" || upVal == "DCBA") {
+                        strncpy(ch.byte_order, upVal.c_str(), sizeof(ch.byte_order) - 1);
+                        ch.byte_order[sizeof(ch.byte_order) - 1] = '\0';
+                        String msg = "i2c.device[" + devIdxStr + "].channel[" + chIdxStr + "].byte_order = " + upVal;
+                        printSuccess(msg.c_str());
+                    } else {
+                        printError("byte_order must be AB, BA, ABCD, or DCBA");
+                    }
+                }
+                else if (field == "scale") {
+                    ch.scale = value.toFloat();
+                    char buf[16];
+                    dtostrf(ch.scale, 6, 4, buf);
+                    String msg = "i2c.device[" + devIdxStr + "].channel[" + chIdxStr + "].scale = " + String(buf);
+                    printSuccess(msg.c_str());
+                }
+                else {
+                    String err = "Unknown I2C channel field: " + field;
+                    printError(err.c_str());
+                }
+            }
+            else {
+                I2CDeviceCfg& dev = cfg.hardware.i2c.devices[devIdx];
+                if (afterDev == "name") {
+                    strncpy(dev.name, value.c_str(), sizeof(dev.name) - 1);
+                    dev.name[sizeof(dev.name) - 1] = '\0';
+                    String msg = "i2c.device[" + devIdxStr + "].name = " + value;
+                    printSuccess(msg.c_str());
+                }
+                else if (afterDev == "address" || afterDev == "addr") {
+                    int addr = strtol(value.c_str(), NULL, 0);
+                    if (addr >= 0 && addr <= 0x7F) {
+                        dev.address = (uint8_t)addr;
+                        String msg = "i2c.device[" + devIdxStr + "].address = 0x" + String(addr, HEX);
+                        printSuccess(msg.c_str());
+                    } else {
+                        printError("I2C address must be 0x00-0x7F");
+                    }
+                }
+                else if (afterDev == "id") {
+                    int id = value.toInt();
+                    if (id >= 0 && id <= 255) {
+                        dev.id = (uint8_t)id;
+                        String msg = "i2c.device[" + devIdxStr + "].id = " + value;
+                        printSuccess(msg.c_str());
+                    } else {
+                        printError("Device id must be 0-255");
+                    }
+                }
+                else {
+                    String err = "Unknown I2C device field: " + afterDev;
+                    printError(err.c_str());
+                }
+            }
+            _cfgMgr->save();
             return;
         }
+        else {
+            String field = key.substring(4);
+            bool success = true;
 
-        if (success) {
-            _cfgMgr->save();
-            _serial->printf("i2c.%s set to %s\n", field.c_str(), value.c_str());
-        } else {
-            printError("Invalid value");
+            if (field == "enable") {
+                cfg.hardware.i2c.enable = (value == "1" || value.equalsIgnoreCase("true"));
+            }
+            else if (field == "frequency" || field == "freq") {
+                cfg.hardware.i2c.frequency = value.toInt();
+            }
+            else if (field == "interval_ms" || field == "interval") {
+                cfg.hardware.i2c.interval_ms = value.toInt();
+            }
+            else if (field == "master_address") {
+                int addr = strtol(value.c_str(), NULL, 0);
+                if (addr >= 0 && addr <= 127) cfg.hardware.i2c.master_address = (uint8_t)addr;
+                else success = false;
+            }
+            else if (field == "max_resp_ms") {
+                cfg.hardware.i2c.max_resp_ms = value.toInt();
+            }
+            else if (field == "max_retry") {
+                int retry = value.toInt();
+                if (retry >= 0 && retry <= 255) cfg.hardware.i2c.max_retry = (uint8_t)retry;
+                else success = false;
+            }
+            else {
+                printError("Unknown key in 'i2c'. Use: enable, frequency, interval_ms, master_address, max_resp_ms, max_retry");
+                return;
+            }
+
+            if (success) {
+                _cfgMgr->save();
+                String msg = "i2c." + field + " = " + value;
+                printSuccess(msg.c_str());
+            } else {
+                printError("Invalid value");
+            }
+            return;
         }
-        return;
     }
     else if (key == "modbus.enable") {
         cfg.hardware.modbus_rs485.enable = (value == "1" || value == "true");
         printSuccess("Updated hw.modbus.enable");
-    } else if (key == "modbus.baud_rate") {
+    }
+    else if (key == "modbus.baud_rate") {
         cfg.hardware.modbus_rs485.baud_rate = value.toInt();
         printSuccess("Updated hw.modbus.baud_rate");
-    } else if (key == "modbus.parity") {
-        strncpy(cfg.hardware.modbus_rs485.parity, value.c_str(), sizeof(cfg.hardware.modbus_rs485.parity) - 1);
+    }
+    else if (key == "modbus.data_bit") {
+        cfg.hardware.modbus_rs485.data_bit = value.toInt();
+        printSuccess("Updated hw.modbus.data_bit");
+    }
+    else if (key == "modbus.stop_bit") {
+        cfg.hardware.modbus_rs485.stop_bit = value.toInt();
+        printSuccess("Updated hw.modbus.stop_bit");
+    }
+    else if (key == "modbus.parity") {
+        strncpy(cfg.hardware.modbus_rs485.parity, value.c_str(),
+                sizeof(cfg.hardware.modbus_rs485.parity) - 1);
+        cfg.hardware.modbus_rs485.parity[sizeof(cfg.hardware.modbus_rs485.parity) - 1] = '\0';
         printSuccess("Updated hw.modbus.parity");
-    } else {
-        printError("Unknown key in 'hw'. (e.g., i2c.enable, modbus.baud_rate)");
+    }
+    else if (key == "modbus.interval_ms") {
+        cfg.hardware.modbus_rs485.interval_ms = value.toInt();
+        printSuccess("Updated hw.modbus.interval_ms");
+    }
+    else if (key == "modbus.max_resp_ms") {
+        cfg.hardware.modbus_rs485.max_resp_ms = value.toInt();
+        printSuccess("Updated hw.modbus.max_resp_ms");
+    }
+    else if (key == "modbus.max_retry") {
+        cfg.hardware.modbus_rs485.max_retry = value.toInt();
+        printSuccess("Updated hw.modbus.max_retry");
+    }
+    // ---------- Modbus Channels ----------
+    else if (key.startsWith("modbus.channel[")) {
+        int braceOpen = key.indexOf('[');
+        int braceClose = key.indexOf(']');
+        if (braceOpen == -1 || braceClose == -1 || braceClose <= braceOpen) {
+            printError("Invalid channel format. Use modbus.channel[<idx>].<field>");
+            return;
+        }
+        String idxStr = key.substring(braceOpen + 1, braceClose);
+        int idx = idxStr.toInt();
+        if (idx < 0 || idx >= MAX_MODBUS_CHANNELS) {
+            printError("Channel index out of range");
+            return;
+        }
+        String field = key.substring(braceClose + 2); // skip "].<field>"
+
+        if (field == "id") {
+            cfg.hardware.modbus_rs485.channels[idx].id = value.toInt();
+            String msg = "Updated modbus.channel[" + idxStr + "].id";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "name") {
+            strncpy(cfg.hardware.modbus_rs485.channels[idx].name, value.c_str(),
+                    sizeof(cfg.hardware.modbus_rs485.channels[idx].name) - 1);
+            cfg.hardware.modbus_rs485.channels[idx].name[sizeof(cfg.hardware.modbus_rs485.channels[idx].name) - 1] = '\0';
+            String msg = "Updated modbus.channel[" + idxStr + "].name";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "slave_id") {
+            cfg.hardware.modbus_rs485.channels[idx].slave_id = value.toInt();
+            String msg = "Updated modbus.channel[" + idxStr + "].slave_id";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "address") {
+            cfg.hardware.modbus_rs485.channels[idx].address = value.toInt();
+            String msg = "Updated modbus.channel[" + idxStr + "].address";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "quantity") {
+            cfg.hardware.modbus_rs485.channels[idx].quantity = value.toInt();
+            String msg = "Updated modbus.channel[" + idxStr + "].quantity";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "type") {
+            strncpy(cfg.hardware.modbus_rs485.channels[idx].type, value.c_str(),
+                    sizeof(cfg.hardware.modbus_rs485.channels[idx].type) - 1);
+            cfg.hardware.modbus_rs485.channels[idx].type[sizeof(cfg.hardware.modbus_rs485.channels[idx].type) - 1] = '\0';
+            String msg = "Updated modbus.channel[" + idxStr + "].type";
+            printSuccess(msg.c_str());
+        }
+        else if (field == "byte_order") {
+            strncpy(cfg.hardware.modbus_rs485.channels[idx].byte_order, value.c_str(),
+                    sizeof(cfg.hardware.modbus_rs485.channels[idx].byte_order) - 1);
+            cfg.hardware.modbus_rs485.channels[idx].byte_order[sizeof(cfg.hardware.modbus_rs485.channels[idx].byte_order) - 1] = '\0';
+            String msg = "Updated modbus.channel[" + idxStr + "].byte_order";
+            printSuccess(msg.c_str());
+        }
+        else {
+            String errMsg = "Unknown channel field: " + field;
+            printError(errMsg.c_str());
+        }
+    }
+    else {
+        printError("Unknown key in 'hw'. Available: i2c.*, modbus.*, modbus.channel[<idx>].*");
     }
 }
 
@@ -344,45 +563,112 @@ void SerialCLI::handleSetComm(String key, String value) {
 
 void SerialCLI::handleSetLoRa(String key, String value) {
     DeviceConfig& cfg = _cfgMgr->get();
-    
-    // General LoRa Settings
+
+    // === General LoRa ===
     if (key == "enabled") {
         cfg.lora.enabled = (value == "1" || value == "true");
         printSuccess("Updated lora.enabled");
-    } else if (key == "region") {
-        strncpy(cfg.lora.region, value.c_str(), sizeof(cfg.lora.region) - 1);
-        printSuccess("Updated lora.region");
-    } else if (key == "lorawan.mode") {
-        strncpy(cfg.lora.lorawan.mode, value.c_str(), sizeof(cfg.lora.lorawan.mode) - 1);
-        printSuccess("Updated lora.lorawan.mode");
-    } else if (key == "lorawan.interval") {
-        cfg.lora.lorawan.uplink_interval_sec = value.toInt();
-        printSuccess("Updated lora.lorawan.interval");
     }
-    
-    // OTAA Keys
+    // === LoRaWAN Common ===
+    else if (key == "lorawan.mode") {
+        strncpy(cfg.lora.lorawan.mode, value.c_str(), sizeof(cfg.lora.lorawan.mode) - 1);
+        cfg.lora.lorawan.mode[sizeof(cfg.lora.lorawan.mode) - 1] = '\0';
+        printSuccess("Updated lora.lorawan.mode");
+    }
+    else if (key == "lorawan.class_type") {
+        strncpy(cfg.lora.lorawan.class_type, value.c_str(), sizeof(cfg.lora.lorawan.class_type) - 1);
+        cfg.lora.lorawan.class_type[sizeof(cfg.lora.lorawan.class_type) - 1] = '\0';
+        printSuccess("Updated lora.lorawan.class_type");
+    }
+    else if (key == "lorawan.class_c_continuous_rx") {
+        cfg.lora.lorawan.class_c_continuous_rx = (value == "1" || value == "true");
+        printSuccess("Updated lora.lorawan.class_c_continuous_rx");
+    }
+    else if (key == "lorawan.uplink_interval_sec") {
+        cfg.lora.lorawan.uplink_interval_sec = value.toInt();
+        printSuccess("Updated lora.lorawan.uplink_interval_sec");
+    }
+    else if (key == "lorawan.tx_sf") {
+        cfg.lora.lorawan.tx_sf = value.toInt();
+        printSuccess("Updated lora.lorawan.tx_sf");
+    }
+    else if (key == "lorawan.tx_power") {
+        cfg.lora.lorawan.tx_power = value.toInt();
+        printSuccess("Updated lora.lorawan.tx_power");
+    }
+    else if (key == "lorawan.tx_adr") {
+        cfg.lora.lorawan.tx_adr = (value == "1" || value == "true");
+        printSuccess("Updated lora.lorawan.tx_adr");
+    }
+    else if (key == "lorawan.duty_cycle") {
+        cfg.lora.lorawan.duty_cycle = (value == "1" || value == "true");
+        printSuccess("Updated lora.lorawan.duty_cycle");
+    }
+    else if (key == "lorawan.fport") {
+        cfg.lora.lorawan.fport = value.toInt();
+        printSuccess("Updated lora.lorawan.fport");
+    }
+    else if (key == "lorawan.rx1_delay_ms") {
+        cfg.lora.lorawan.rx1_delay_ms = value.toInt();
+        printSuccess("Updated lora.lorawan.rx1_delay_ms");
+    }
+    else if (key == "lorawan.rx1_data_rate") {
+        strncpy(cfg.lora.lorawan.rx1_data_rate, value.c_str(), sizeof(cfg.lora.lorawan.rx1_data_rate) - 1);
+        cfg.lora.lorawan.rx1_data_rate[sizeof(cfg.lora.lorawan.rx1_data_rate) - 1] = '\0';
+        printSuccess("Updated lora.lorawan.rx1_data_rate");
+    }
+    else if (key == "lorawan.rx2_frequency") {
+        cfg.lora.lorawan.rx2_frequency = value.toInt();
+        printSuccess("Updated lora.lorawan.rx2_frequency");
+    }
+    else if (key == "lorawan.rx2_data_rate") {
+        strncpy(cfg.lora.lorawan.rx2_data_rate, value.c_str(), sizeof(cfg.lora.lorawan.rx2_data_rate) - 1);
+        cfg.lora.lorawan.rx2_data_rate[sizeof(cfg.lora.lorawan.rx2_data_rate) - 1] = '\0';
+        printSuccess("Updated lora.lorawan.rx2_data_rate");
+    }
+    else if (key == "lorawan.confirmed_uplink") {
+        cfg.lora.lorawan.confirmed_uplink = (value == "1" || value == "true");
+        printSuccess("Updated lora.lorawan.confirmed_uplink");
+    }
+
+    // === OTAA Keys ===
     else if (key == "otaa.join_eui") {
         strncpy(cfg.lora.lorawan.otaa.join_eui, value.c_str(), sizeof(cfg.lora.lorawan.otaa.join_eui) - 1);
+        cfg.lora.lorawan.otaa.join_eui[sizeof(cfg.lora.lorawan.otaa.join_eui) - 1] = '\0';
         printSuccess("Updated OTAA join_eui");
-    } else if (key == "otaa.dev_eui") {
+    }
+    else if (key == "otaa.dev_eui") {
         strncpy(cfg.lora.lorawan.otaa.dev_eui, value.c_str(), sizeof(cfg.lora.lorawan.otaa.dev_eui) - 1);
+        cfg.lora.lorawan.otaa.dev_eui[sizeof(cfg.lora.lorawan.otaa.dev_eui) - 1] = '\0';
         printSuccess("Updated OTAA dev_eui");
-    } else if (key == "otaa.app_key") {
+    }
+    else if (key == "otaa.app_key") {
         strncpy(cfg.lora.lorawan.otaa.app_key, value.c_str(), sizeof(cfg.lora.lorawan.otaa.app_key) - 1);
+        cfg.lora.lorawan.otaa.app_key[sizeof(cfg.lora.lorawan.otaa.app_key) - 1] = '\0';
         printSuccess("Updated OTAA app_key");
     }
-    
-    // ABP Keys
+    else if (key == "otaa.nwk_key") {
+        strncpy(cfg.lora.lorawan.otaa.nwk_key, value.c_str(), sizeof(cfg.lora.lorawan.otaa.nwk_key) - 1);
+        cfg.lora.lorawan.otaa.nwk_key[sizeof(cfg.lora.lorawan.otaa.nwk_key) - 1] = '\0';
+        printSuccess("Updated OTAA nwk_key");
+    }
+
+    // === ABP Keys ===
     else if (key == "abp.dev_addr") {
         strncpy(cfg.lora.lorawan.abp.dev_addr, value.c_str(), sizeof(cfg.lora.lorawan.abp.dev_addr) - 1);
+        cfg.lora.lorawan.abp.dev_addr[sizeof(cfg.lora.lorawan.abp.dev_addr) - 1] = '\0';
         printSuccess("Updated ABP dev_addr");
-    } else if (key == "abp.nwk_skey") {
+    }
+    else if (key == "abp.nwk_skey") {
         strncpy(cfg.lora.lorawan.abp.nwk_skey, value.c_str(), sizeof(cfg.lora.lorawan.abp.nwk_skey) - 1);
+        cfg.lora.lorawan.abp.nwk_skey[sizeof(cfg.lora.lorawan.abp.nwk_skey) - 1] = '\0';
         printSuccess("Updated ABP nwk_skey");
-    } else if (key == "abp.app_skey") {
+    }
+    else if (key == "abp.app_skey") {
         strncpy(cfg.lora.lorawan.abp.app_skey, value.c_str(), sizeof(cfg.lora.lorawan.abp.app_skey) - 1);
+        cfg.lora.lorawan.abp.app_skey[sizeof(cfg.lora.lorawan.abp.app_skey) - 1] = '\0';
         printSuccess("Updated ABP app_skey");
-    } 
+    }
     else {
         printError("Unknown key in 'lora'. Check 'show lora' for available keys.");
     }
