@@ -3,7 +3,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Wire.h>
-#include <U8g2lib.h>
+//#include <U8g2lib.h>
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>

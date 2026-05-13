@@ -77,38 +77,6 @@ void SerialCLI::processCommand(String cmdLine) {
         isLogging = true;
         printSuccess("Resuming logging");
     }
-    else if (cmd == "sd.list" || cmd == "listfile" || cmd == "ls") {
-        if (!_sd) printError("SD not available");
-        else _sd->listFiles(*_serial, "/");
-    }
-    else if (cmd == "sd.read" || cmd == "sd.cat" || cmd == "cat") {
-        if (!_sd) { printError("SD not available"); }
-        else {
-            if (args.length() == 0) { printError("Usage: sd.cat <path>"); }
-            else {
-                String content = _sd->readFile(args.c_str());
-                if (content == "ERROR_OPEN") printError("Open failed");
-                else {
-                    _serial->println(content);
-                }
-            }
-        }
-    }
-    else if (cmd == "uplink") {
-        if (!_lorawan) { printError("LoRa not available"); }
-        else if (args.length() == 0) { printError("Usage: uplink <payload>"); }
-        else {
-            _serial->print("Sending uplink: "); _serial->println(args);
-            _lorawan->sendNow(args.c_str());
-        }
-    }
-    else if (cmd == "toggle") {
-        if (!_ls) { printError("LS Switch not available"); }
-        else {
-            _ls->toggle();
-            printSuccess("Toggled LS Switch");
-        }
-    }
     else if (cmd == "set") {
         if (args.length() == 0) printError("Usage: set <category.key> <value>");
         else handleSetCommand(args);
@@ -159,27 +127,6 @@ void SerialCLI::processCommand(String cmdLine) {
         }
         if (nDevices == 0) _serial->println("No I2C devices found\n");
         else _serial->println("done\n");
-    }
-    else if (cmd == "sd.config" || cmd == "sd.showconfig") {
-        if (!_sd) { printError("SD not available"); }
-        else {
-            const char* cfgName = _sd->getConfig();
-            _serial->printf("Config file: %s\n", cfgName);
-            String content = _sd->readFile(cfgName);
-            if (content == "ERROR_OPEN") {
-                printError("Cannot open config file");
-            } else {
-                DynamicJsonDocument doc(4096);
-                DeserializationError err = deserializeJson(doc, content);
-                if (err) {
-                    _serial->println("JSON parse error, showing raw content:");
-                    _serial->println(content);
-                } else {
-                    serializeJsonPretty(doc, *_serial);
-                    _serial->println();
-                }
-            }
-        }
     }
     else {
         printError("Unknown command.");

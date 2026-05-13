@@ -9,7 +9,7 @@ Logger logger(&sd);
 LoRaWan lorawan;
 I2C i2cMaster;
 MODBUS_RS485 modbus_rs485(&Serial2, RS485_DE_PIN, RS485_RE_PIN);
-OLED oled;
+//OLED oled;
 MySHTC3 sht(&Wire, PB7, PB6);
 Analog420 analog;
 ConfigManager cfgMgr;
@@ -22,6 +22,7 @@ bool ledEnabled = false;
 bool analogEnabled = false;
 bool modbus_rs485Enabled = false;
 bool sht3Enabled = false;
+bool sd_ready = false;
 
 String displayText = "";
 static char main_payload[256];
@@ -90,7 +91,7 @@ void setup() {
     SPI.setMOSI(SD_MOSI);
     SPI.begin(); 
 
-    bool sd_ready = sd.begin();
+    sd_ready = sd.begin();
     if (!sd_ready) {
         Serial1.println("[WARN] SD init failed, forced to use EEPROM.");
         cfg.device.use_sd_config = false;
@@ -143,11 +144,12 @@ void setup() {
             ls.begin();
         }
         if (oledEnabled) {
-            oled.begin();
-            oled.clear();
-            oled.setFont(u8g2_font_5x7_tr);
-            oled.print("Booting...", 0, 10);
-            oled.update();
+            delay(50);
+            // oled.begin();
+            // oled.clear();
+            // oled.setFont(u8g2_font_5x7_tr);
+            // oled.print("Booting...", 0, 10);
+            // oled.update();
         }
         if (sht3Enabled) {
             if (!sht.begin()) {
@@ -160,6 +162,14 @@ void setup() {
             JsonObject analog_json = hw["analog"].as<JsonObject>();
             analog.loadConfigFromJson(analog_json);
             analog.begin();
+        }
+        if (sd_ready && cfg.logging.enabled && cfg.logging.sd_log) {
+            logger.logMsg("INFO", "System boot completed");
+            logger.logKV("HW_STATE", 4,
+            "i2c", i2cEnabled ? 1.0 : 0.0, "",
+            "modbus", modbus_rs485Enabled ? 1.0 : 0.0, "",
+            "oled", oledEnabled ? 1.0 : 0.0, "",
+            "sht3", sht3Enabled ? 1.0 : 0.0, "");
         }
         lorawan.loadConfig(lora);
 
@@ -185,11 +195,12 @@ void setup() {
             ls.begin();
         }
         if (oledEnabled) {
-            oled.begin();
-            oled.clear();
-            oled.setFont(u8g2_font_5x7_tr);
-            oled.print("Booting...", 0, 10);
-            oled.update();
+            delay(50);
+            // oled.begin();
+            // oled.clear();
+            // oled.setFont(u8g2_font_5x7_tr);
+            // oled.print("Booting...", 0, 10);
+            // oled.update();
         }
         if (sht3Enabled) {
             if (!sht.begin()) {
@@ -209,11 +220,12 @@ void setup() {
 
     // ===== INIT COMMON HARDWARE =====
     if (oledEnabled) {
-        oled.begin();
-        oled.clear();
-        oled.setFont(u8g2_font_5x7_tr);
-        oled.print("Booting...", 0, 10);
-        oled.update();
+        delay(50);
+        // oled.begin();
+        // oled.clear();
+        // oled.setFont(u8g2_font_5x7_tr);
+        // oled.print("Booting...", 0, 10);
+        // oled.update();
     }
     if (ledEnabled) {
         pinMode(LED_PIN, OUTPUT);
@@ -309,9 +321,16 @@ void loop() {
             batData["mA"] = serialized(String(readCurrent_mA(), 1));
             batData["st"] = getChargeStatus();
 
-            // Serialize data for LoRa transmission
+            DeviceConfig& cfg = cfgMgr.get();
             serializeJson(payloadDoc, main_payload, sizeof(main_payload));
-
+            if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                logger.logMsg("UPLINK_PAYLOAD", main_payload);
+                logger.logKV("BATTERY", 3,
+                    "voltage", readBatteryVoltage(), "V",
+                    "current", readCurrent_mA(), "mA",
+                    "status", (getChargeStatus() == "Charging") ? 1.0 : 0.0, ""
+                );
+            }
             // ===== LoRaWAN Process (Uplink & Downlink) =====
             lorawan.loop(main_payload);
             
@@ -333,16 +352,36 @@ void loop() {
                                 uint8_t state = strtol(stateStr, NULL, 16);
                                 digitalWrite(LED_PIN, state ? HIGH : LOW);
                                 Serial1.printf("ACTION: LED -> %s\n", state ? "ON" : "OFF");
+                                if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                    logger.logKV("DOWNLINK_CMD", 2,
+                                    "cmd", 0x01, "",
+                                    "state", state, "");
+                                }
+
                             }
                             break;
                         }
                         case 0x02: {  // CMD 02: Control Low-Side Switch
-                            if (len >= 6 && ls_swEnabled) { 
+                            if (len >= 6 && ls_swEnabled) {
                                 char chStr[3]   = {downlink_payload[2], downlink_payload[3], '\0'};
                                 char stateStr[3] = {downlink_payload[4], downlink_payload[5], '\0'};
                                 uint8_t channel = strtol(chStr, NULL, 16);
                                 uint8_t state   = strtol(stateStr, NULL, 16);
                                 Serial1.printf("ACTION: LS Switch CH:%d -> %s\n", channel, state ? "ON" : "OFF");
+                                if (ls_swEnabled) {
+                                    if(state){
+                                        ls.on();
+                                    } else {
+                                        ls.off();
+                                    }
+                                }
+                                if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                    logger.logKV("DOWNLINK_CMD", 3,
+                                    "cmd", 0x02, "",
+                                    "channel", channel, "",
+                                    "state", state, "");
+                                }
+
                             }
                             break;
                         }
@@ -355,16 +394,20 @@ void loop() {
                                     char hexChar[3] = {downlink_payload[i], downlink_payload[i+1], '\0'};
                                     textBuffer[textIdx++] = (char)strtol(hexChar, NULL, 16);
                                 }
-                                oled.clear();
-                                oled.setFont(u8g2_font_5x7_tr); 
-                                oled.print(textBuffer, 0, 10);
-                                oled.update();
+                                // oled.clear();
+                                // oled.setFont(u8g2_font_5x7_tr); 
+                                // oled.print(textBuffer, 0, 10);
+                                // oled.update();
                                 Serial1.printf("ACTION: OLED -> %s\n", textBuffer);
                             }
                             break;
                         }
                         default:
                             Serial1.printf("UNKNOWN COMMAND: 0x%02X\n", command);
+                            if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                logger.logKV("DOWNLINK_ERR", 1,
+                                "unknown_cmd", command, "");
+                            }
                             break;
                     }
                 }
@@ -372,7 +415,7 @@ void loop() {
 
             // ===== Update OLED UI =====
             if (oledEnabled) {
-                oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
+                // oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
             }
             displayText = ""; // Clear text for the next cycle
         }

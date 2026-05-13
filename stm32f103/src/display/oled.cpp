@@ -1,151 +1,144 @@
-#include "mylib.h"
-#include "config.h"
+// #include "mylib.h"
+// #include "config.h"
 
-#include <U8g2lib.h>
-#include <Wire.h>
+// #include <U8g2lib.h>
+// #include <Wire.h>
 
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
-    U8G2_R0,               
-    U8X8_PIN_NONE,         
-    OLED_SCL_PIN,                   
-    OLED_SDA_PIN                    
-);
+// U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
+//     U8G2_R0,               
+//     U8X8_PIN_NONE,         
+//     OLED_SCL_PIN,                   
+//     OLED_SDA_PIN                    
+// );
 
-void OLED::begin() {
-    Wire.begin();
-    u8g2.begin();
-}
+// void OLED::begin() {
+//     Wire.begin();
+//     u8g2.begin();
+// }
 
-// ===== Load Config =====
-void OLED::loadConfig(SDResourceManager& sd, const char* path) {
-    String json = sd.readFile(path);
-    if (json == "ERROR_OPEN") {
-        Serial1.print(F("OLED: failed to open config " ));
-        Serial1.println(path);
-        return;
-    }
+// // ===== Load Config =====
+// void OLED::loadConfig(SDResourceManager& sd, const char* path) {
+//     String json = sd.readFile(path);
+//     if (json == "ERROR_OPEN") {
+//         Serial1.print(F("OLED: failed to open config " ));
+//         Serial1.println(path);
+//         return;
+//     }
 
-    StaticJsonDocument<1024> doc;
-    DeserializationError err = deserializeJson(doc, json);
-    if (err) {
-        Serial1.println(F("OLED: JSON parse failed"));
-        return;
-    }
+//     StaticJsonDocument<1024> doc;
+//     DeserializationError err = deserializeJson(doc, json);
+//     if (err) {
+//         Serial1.println(F("OLED: JSON parse failed"));
+//         return;
+//     }
 
-    JsonObject hardware = doc["hardware"].as<JsonObject>();
-    if (!hardware.containsKey("oled")) return;
-    JsonObject oled = hardware["oled"].as<JsonObject>();
-    if (!oled.containsKey("address")) return;
-    const char* addrStr = oled["address"].as<const char*>();
-    uint8_t addr = (uint8_t) strtol(addrStr, NULL, 16);
+//     JsonObject hardware = doc["hardware"].as<JsonObject>();
+//     if (!hardware.containsKey("oled")) return;
+//     JsonObject oled = hardware["oled"].as<JsonObject>();
+//     if (!oled.containsKey("address")) return;
+//     const char* addrStr = oled["address"].as<const char*>();
+//     uint8_t addr = (uint8_t) strtol(addrStr, NULL, 16);
 
-    u8g2.setI2CAddress(addr << 1);
+//     u8g2.setI2CAddress(addr << 1);
 
-    Serial1.print(F("OLED: Address set to "));
-    Serial1.println(addrStr);
+//     Serial1.print(F("OLED: Address set to "));
+//     Serial1.println(addrStr);
 
-}
+// }
 
-void OLED::loadConfigFromStruct(const HardwareCfg& hw) {
-    if (!hw.oled.enabled) {
-        Serial1.println(F("OLED: disabled in struct config"));
-        return;
-    }
-    uint8_t addr = hw.oled.address;
-    u8g2.setI2CAddress(addr << 1);
-    Serial1.print(F("OLED: Address set from struct to 0x"));
-    char buf[8];
-    sprintf(buf, "%02X", addr);
-    Serial1.println(buf);
-}
+// void OLED::loadConfigFromStruct(const HardwareCfg& hw) {
+//     if (!hw.oled.enabled) {
+//         Serial1.println(F("OLED: disabled in struct config"));
+//         return;
+//     }
+//     uint8_t addr = hw.oled.address;
+//     u8g2.setI2CAddress(addr << 1);
+//     Serial1.print(F("OLED: Address set from struct to 0x"));
+//     char buf[8];
+//     sprintf(buf, "%02X", addr);
+//     Serial1.println(buf);
+// }
 
-void OLED::clear() {
-    u8g2.clearBuffer();
-}
+// void OLED::clear() {
+//     u8g2.clearBuffer();
+// }
 
-void OLED::update() {
-    u8g2.sendBuffer();
-}
+// void OLED::update() {
+//     u8g2.sendBuffer();
+// }
 
-// ---------------- TEXT ----------------
-void OLED::setFont(const uint8_t* font) {
-    u8g2.setFont(font);
-}
+// // ---------------- TEXT ----------------
+// void OLED::setFont(const uint8_t* font) {
+//     u8g2.setFont(font);
+// }
 
-void OLED::print(const char* text, int x, int y) {
-    u8g2.drawStr(x, y, text);
-}
+// void OLED::print(const char* text, int x, int y) {
+//     u8g2.drawStr(x, y, text);
+// }
 
-void OLED::println(const char* text, int x, int y) {
-    u8g2.drawStr(x, y, text);
-}
+// void OLED::println(const char* text, int x, int y) {
+//     u8g2.drawStr(x, y, text);
+// }
 
-void OLED::drawStr(int x, int y, const char* text) {
-    u8g2.drawStr(x, y, text);
-}
+// void OLED::drawStr(int x, int y, const char* text) {
+//     u8g2.drawStr(x, y, text);
+// }
 
-// ---------------- DRAW ----------------
-void OLED::drawPixel(int x, int y) {
-    u8g2.drawPixel(x, y);
-}
+// // ---------------- DRAW ----------------
 
-void OLED::drawLine(int x1, int y1, int x2, int y2) {
-    u8g2.drawLine(x1, y1, x2, y2);
-}
+// void OLED::drawBox(int x, int y, int w, int h) {
+//     u8g2.drawBox(x, y, w, h);
+// }
 
-void OLED::drawBox(int x, int y, int w, int h) {
-    u8g2.drawBox(x, y, w, h);
-}
+// void OLED::drawFrame(int x, int y, int w, int h) {
+//     u8g2.drawFrame(x, y, w, h);
+// }
 
-void OLED::drawFrame(int x, int y, int w, int h) {
-    u8g2.drawFrame(x, y, w, h);
-}
+// // ---------------- SETTINGS ----------------
+// void OLED::setContrast(uint8_t value) {
+//     u8g2.setContrast(value);
+// }
 
-// ---------------- SETTINGS ----------------
-void OLED::setContrast(uint8_t value) {
-    u8g2.setContrast(value);
-}
+// void OLED::setFlip(bool flip) {
+//     u8g2.setFlipMode(flip ? 1 : 0);
+// }
 
-void OLED::setFlip(bool flip) {
-    u8g2.setFlipMode(flip ? 1 : 0);
-}
+// // ---------------- TEST ----------------
+// void OLED::test() {
+//     clear();
+//     setFont(u8g2_font_5x7_tr);
 
-// ---------------- TEST ----------------
-void OLED::test() {
-    clear();
-    setFont(u8g2_font_5x7_tr);
+//     drawStr(0, 10, "OLED TEST");
+//     drawStr(0, 20, "HELLO ARDUINO");
 
-    drawStr(0, 10, "OLED TEST");
-    drawStr(0, 20, "HELLO ARDUINO");
+//     drawFrame(0, 0, 128, 64);
+//     drawLine(0, 32, 128, 32);
 
-    drawFrame(0, 0, 128, 64);
-    drawLine(0, 32, 128, 32);
+//     update();
+// }
 
-    update();
-}
-
-void OLED::updateDisplay(const char* payload , const char* status) {
-    clear();
+// void OLED::updateDisplay(const char* payload , const char* status) {
+//     clear();
     
-    setFont(u8g2_font_5x7_tr);
+//     setFont(u8g2_font_5x7_tr);
 
-    print("SYS: ONLINE", 0, 10);
+//     print("SYS: ONLINE", 0, 10);
 
-    print("Send Uplink:", 0, 22);
+//     print("Send Uplink:", 0, 22);
 
-    int y = 32;
-    char buf[64];
-    strncpy(buf, payload, sizeof(buf)-1);
+//     int y = 32;
+//     char buf[64];
+//     strncpy(buf, payload, sizeof(buf)-1);
 
-    char* line = strtok(buf, "\n");
-    while (line != NULL && y < 50) {
-        print(line, 0, y);
-        y += 8;
-        line = strtok(NULL, "\n");
-    }
+//     char* line = strtok(buf, "\n");
+//     while (line != NULL && y < 50) {
+//         print(line, 0, y);
+//         y += 8;
+//         line = strtok(NULL, "\n");
+//     }
 
-    String t = String("Downlink: ") + status;
-    print(t.c_str(), 0, 62);
+//     String t = String("Downlink: ") + status;
+//     print(t.c_str(), 0, 62);
 
-    update();
-}
+//     update();
+// }
