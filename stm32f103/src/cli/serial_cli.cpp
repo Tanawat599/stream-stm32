@@ -878,7 +878,6 @@ void SerialCLI::printHelp() {
     _serial->println("  " CLI_COLOR_YELLOW "sd.config" CLI_COLOR_RESET "                     : Show config from SD card");
      _serial->println("  " CLI_COLOR_YELLOW "sd.list" CLI_COLOR_RESET "                       : List files on SD card");
      _serial->println("  " CLI_COLOR_YELLOW "sd.read <path>" CLI_COLOR_RESET "                 : Read file from SD card");
-     _serial->println("  " CLI_COLOR_YELLOW "uplink <payload>" CLI_COLOR_RESET "                 : Send LoRa uplink");
      _serial->println("  " CLI_COLOR_YELLOW "toggle" CLI_COLOR_RESET "                    : Toggle LS Switch (if available)");
      _serial->println("  " CLI_COLOR_YELLOW "i2c scan" CLI_COLOR_RESET "                    : Scan I2C bus for devices");
      _serial->println();

@@ -60,12 +60,28 @@ String getChargeStatus() {
     if (!chrg && done) {
         return "Charging";
     }
-
     if (chrg && !done) {
         return "Charge Full";
     }
 
     return "Idle";
+}
+void spiInitForSD() {
+    SPI.end();
+    SPI.setSCLK(SD_SCK);
+    SPI.setMISO(SD_MISO);
+    SPI.setMOSI(SD_MOSI);
+    SPI.begin();
+    digitalWrite(SD_CS, LOW);
+}
+void spiDeinitForSD() {
+    digitalWrite(SD_CS, HIGH);
+    SPI.end();
+    SPI.setSCLK(PA5);
+    SPI.setMISO(PA6);
+    SPI.setMOSI(PA7);
+    SPI.begin();
+    
 }
 
 void setup() {
@@ -78,7 +94,8 @@ void setup() {
     Serial1.println("\n[SYSTEM] Booting...");
 
     DeviceConfig& cfg = cfgMgr.get();
-
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, 1); 
     // ===== Button & ADC Setup =====
     pinMode(BUTTON_PIN, INPUT);
     pinMode(CHRG_PIN, INPUT_PULLUP);
@@ -86,9 +103,9 @@ void setup() {
     analogReadResolution(12);
 
     // ===== SD SPI Init =====
-    SPI.setSCLK(SD_SCK);
-    SPI.setMISO(SD_MISO);
-    SPI.setMOSI(SD_MOSI);
+    // SPI.setSCLK(SD_SCK);
+    // SPI.setMISO(SD_MISO);
+    // SPI.setMOSI(SD_MOSI);
     SPI.begin(); 
 
     sd_ready = sd.begin();
@@ -96,7 +113,6 @@ void setup() {
         Serial1.println("[WARN] SD init failed, forced to use EEPROM.");
         cfg.device.use_sd_config = false;
     }
-    //cfg.device.use_sd_config = true;
     // =========================================================
     //                BRANCH CONFIG SOURCE
     // =========================================================
@@ -110,7 +126,7 @@ void setup() {
             while (1) cli.update(); 
         }
 
-        StaticJsonDocument<4096> doc;
+        StaticJsonDocument<1024> doc;
         auto err = deserializeJson(doc, file);
         file.close();
 
@@ -213,6 +229,18 @@ void setup() {
             analog.loadConfigFromStruct(cfg.hardware);
             analog.begin();
         }
+        if (sd_ready && cfg.logging.enabled && cfg.logging.sd_log) {
+            spiInitForSD();
+            logger.logMsg("INFO", "System boot completed");
+            logger.logKV("HW_STATE", 4,
+            "i2c", i2cEnabled ? 1.0 : 0.0, "",
+            "modbus", modbus_rs485Enabled ? 1.0 : 0.0, "",
+            "oled", oledEnabled ? 1.0 : 0.0, "",
+            "sht3", sht3Enabled ? 1.0 : 0.0, "");
+            logger.logMsg("INFO", "System boot done");
+            spiDeinitForSD();
+            
+        }
         lorawan.loadConfigFromStruct(cfg.lora);
         
     }
@@ -227,10 +255,7 @@ void setup() {
         // oled.print("Booting...", 0, 10);
         // oled.update();
     }
-    if (ledEnabled) {
-        pinMode(LED_PIN, OUTPUT);
-        digitalWrite(LED_PIN, LOW);
-    }
+
     if (sht3Enabled && sht.begin()) {
         Serial1.println("SHTC3 init success");
     }
@@ -251,6 +276,8 @@ void setup() {
     cli.printPrompt(); 
 }
 void loop() {
+    static unsigned long lastLogTime = 0;  
+    const unsigned long LOG_INTERVAL = 30000;
 
     if (isLogging && Serial1.available() > 0) {
         isLogging = false; 
@@ -324,12 +351,14 @@ void loop() {
             DeviceConfig& cfg = cfgMgr.get();
             serializeJson(payloadDoc, main_payload, sizeof(main_payload));
             if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
-                logger.logMsg("UPLINK_PAYLOAD", main_payload);
-                logger.logKV("BATTERY", 3,
-                    "voltage", readBatteryVoltage(), "V",
-                    "current", readCurrent_mA(), "mA",
-                    "status", (getChargeStatus() == "Charging") ? 1.0 : 0.0, ""
-                );
+                if (millis() - lastLogTime >= LOG_INTERVAL) {
+                    spiInitForSD();
+                    logger.logMsg("UPLINK_PAYLOAD", main_payload);
+                    spiDeinitForSD();
+                    lastLogTime = millis();
+                } else {
+                    return; 
+                }
             }
             // ===== LoRaWAN Process (Uplink & Downlink) =====
             lorawan.loop(main_payload);
@@ -347,17 +376,18 @@ void loop() {
 
                     switch (command) {
                         case 0x01: {  // CMD 01: Control LED
-                            if (len >= 4 && ledEnabled) { 
+                            if (len >= 4 ) { 
                                 char stateStr[3] = {downlink_payload[2], downlink_payload[3], '\0'};
                                 uint8_t state = strtol(stateStr, NULL, 16);
-                                digitalWrite(LED_PIN, state ? HIGH : LOW);
+                                digitalWrite(LED_PIN, state ? LOW : HIGH);
                                 Serial1.printf("ACTION: LED -> %s\n", state ? "ON" : "OFF");
                                 if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                    spiInitForSD();
                                     logger.logKV("DOWNLINK_CMD", 2,
                                     "cmd", 0x01, "",
                                     "state", state, "");
+                                    spiDeinitForSD();
                                 }
-
                             }
                             break;
                         }
@@ -376,10 +406,12 @@ void loop() {
                                     }
                                 }
                                 if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                    spiInitForSD();
                                     logger.logKV("DOWNLINK_CMD", 3,
                                     "cmd", 0x02, "",
                                     "channel", channel, "",
                                     "state", state, "");
+                                    spiDeinitForSD();
                                 }
 
                             }
@@ -405,8 +437,10 @@ void loop() {
                         default:
                             Serial1.printf("UNKNOWN COMMAND: 0x%02X\n", command);
                             if (cfg.logging.enabled && cfg.logging.sd_log && sd_ready) {
+                                spiInitForSD();
                                 logger.logKV("DOWNLINK_ERR", 1,
                                 "unknown_cmd", command, "");
+                                spiDeinitForSD();
                             }
                             break;
                     }
@@ -414,36 +448,10 @@ void loop() {
             }
 
             // ===== Update OLED UI =====
-            if (oledEnabled) {
-                // oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
-            }
-            displayText = ""; // Clear text for the next cycle
+            // if (oledEnabled) {
+            //     // oled.updateDisplay(displayText.c_str(), downlink_payload ? downlink_payload : "ok");
+            // }
+            // displayText = ""; 
         }
     }
 }
-// #include <Arduino.h>
-// #include "mylib.h"
-
-// I2C i2cSlave;
-
-// const uint8_t SLAVE_ADDRESS = 0x40; 
-
-// void setup() {
-//     Serial1.begin(115200);
-//     delay(2000); 
-
-//     Serial1.println(F("\n============================="));
-//     Serial1.println(F("   I2C SLAVE SENSOR START  "));
-//     Serial1.println(F("============================="));
-
-//     i2cSlave.slave_begin(SLAVE_ADDRESS);
-    
-//     Serial1.print(F("Listening for Master on Address: 0x"));
-//     Serial1.println(SLAVE_ADDRESS, HEX);
-// }
-
-// void loop() {
-//     i2cSlave.slave_loop();
-    
-//     delay(10);
-// }
