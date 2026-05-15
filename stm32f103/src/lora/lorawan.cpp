@@ -254,6 +254,160 @@ void LoRaWan::loadConfig(const JsonObject& lora) {
     Serial1.println(F("[LoRa] Config Loaded OK\n"));
 }
 
+void LoRaWan::loadConfigFromStruct(const LoRaCfg& cfg) {
+
+    Serial1.println(F("\n========== LORAWAN CONFIG =========="));
+
+    // ================= MODE =================
+    Serial1.print(F("Mode                : "));
+    Serial1.println(cfg.lorawan.mode);
+
+    char modeBuf[8] = {0};
+    strncpy(modeBuf, cfg.lorawan.mode, sizeof(modeBuf)-1);
+    if (strcmp(modeBuf, "ABP") == 0) currentActivation = MODE_ABP;
+    else currentActivation = MODE_OTAA;
+
+    // ================= FPORT =================
+    currentFPort = (uint8_t)cfg.lorawan.fport;
+    Serial1.print(F("FPort               : "));
+    Serial1.println((int)currentFPort);
+
+    // ================= CONFIRMED =================
+    currentAck = cfg.lorawan.confirmed_uplink ? true : false;
+    Serial1.print(F("Confirmed Uplink    : "));
+    Serial1.println(currentAck ? "true" : "false");
+
+    // ================= ADR =================
+    currentADR = cfg.lorawan.tx_adr ? true : false;
+    Serial1.print(F("ADR                 : "));
+    Serial1.println(currentADR ? "true" : "false");
+
+    // ================= SF =================
+    currentSF = (uint8_t)cfg.lorawan.tx_sf;
+    Serial1.print(F("Spreading Factor    : SF"));
+    Serial1.println((int)currentSF);
+
+    node.setADR(currentADR);
+
+    node.setDatarate(12 - currentSF);
+
+    // ================= UPLINK INTERVAL =================
+    uplinkIntervalMs = (uint64_t)cfg.lorawan.uplink_interval_sec * 1000ULL;
+    Serial1.print(F("Uplink Interval     : "));
+    Serial1.print(cfg.lorawan.uplink_interval_sec);
+    Serial1.println(F(" sec"));
+
+    // ================= DUTY CYCLE =================
+    Serial1.print(F("Duty Cycle          : "));
+    Serial1.println(cfg.lorawan.duty_cycle);
+
+    node.setDutyCycle(cfg.lorawan.duty_cycle);
+
+    // =====================================================
+    // ======================= OTAA ========================
+    // =====================================================
+
+    Serial1.println(F("\n---------- OTAA ----------"));
+
+    // Safe copy and print OTAA strings
+
+    // Diagnostic: print raw pointers and lengths to detect corruption
+    Serial1.print(F("[DBG] OTAA.dev_eui ptr: "));
+    Serial1.println((unsigned long)cfg.lorawan.otaa.dev_eui);
+    Serial1.print(F("[DBG] OTAA.app_key ptr: "));
+    Serial1.println((unsigned long)cfg.lorawan.otaa.app_key);
+    Serial1.print(F("[DBG] ABP.dev_addr ptr: "));
+    Serial1.println((unsigned long)cfg.lorawan.abp.dev_addr);
+
+    Serial1.print(F("[DBG] OTAA.dev_eui len: "));
+    Serial1.println(strlen(cfg.lorawan.otaa.dev_eui));
+    Serial1.print(F("[DBG] OTAA.app_key len: "));
+    Serial1.println(strlen(cfg.lorawan.otaa.app_key));
+
+    // Print first 12 chars as hex values to spot offsets
+    Serial1.print(F("[DBG] OTAA.dev_eui raw: "));
+    for (int i = 0; i < 16 && i < (int)strlen(cfg.lorawan.otaa.dev_eui); i++) {
+        Serial1.print(cfg.lorawan.otaa.dev_eui[i]);
+    }
+    Serial1.println();
+
+    char joinBuf[25] = {0};
+    char devBuf[25] = {0};
+    char appKeyBuf[35] = {0};
+    strncpy(joinBuf, cfg.lorawan.otaa.join_eui, sizeof(joinBuf)-1);
+    strncpy(devBuf, cfg.lorawan.otaa.dev_eui, sizeof(devBuf)-1);
+    strncpy(appKeyBuf, cfg.lorawan.otaa.app_key, sizeof(appKeyBuf)-1);
+
+    Serial1.print(F("Join EUI            : "));
+    Serial1.println(joinBuf);
+    Serial1.print(F("Dev EUI             : "));
+    Serial1.println(devBuf);
+    Serial1.print(F("App Key             : "));
+    Serial1.println(appKeyBuf);
+
+    if (strlen(joinBuf) > 0) {
+        if (strlen(joinBuf) < 16 || strlen(devBuf) < 16 || strlen(appKeyBuf) < 32) {
+            Serial1.println(F("[LoRa] WARNING: OTAA strings look truncated or too short. EEPROM may contain old/invalid data."));
+            Serial1.println(F("[LoRa] To fix: run 'factory-reset' in CLI or clear EEPROM so defaults are written."));
+        } else {
+            joinEUI = parseHexToUint64(joinBuf);
+            devEUI  = parseHexToUint64(devBuf);
+            parseHexToBytes(appKeyBuf, appKey, 16);
+        }
+    }
+
+    // =====================================================
+    // ======================== ABP ========================
+    // =====================================================
+
+    Serial1.println(F("\n---------- ABP ----------"));
+
+    // Safe copy ABP strings
+    char devAddrBuf[16] = {0};
+    char nwkBuf[40] = {0};
+    char appSBuf[40] = {0};
+    strncpy(devAddrBuf, cfg.lorawan.abp.dev_addr, sizeof(devAddrBuf)-1);
+    strncpy(nwkBuf, cfg.lorawan.abp.nwk_skey, sizeof(nwkBuf)-1);
+    strncpy(appSBuf, cfg.lorawan.abp.app_skey, sizeof(appSBuf)-1);
+
+    Serial1.print(F("Dev Addr            : "));
+    Serial1.println(devAddrBuf);
+    Serial1.print(F("NwkSKey             : "));
+    Serial1.println(nwkBuf);
+    Serial1.print(F("AppSKey             : "));
+    Serial1.println(appSBuf);
+
+    if (strlen(devAddrBuf) > 0) {
+        if (strlen(devAddrBuf) < 8 || strlen(nwkBuf) < 32 || strlen(appSBuf) < 32) {
+            Serial1.println(F("[LoRa] WARNING: ABP strings look truncated or too short. EEPROM may contain old/invalid data."));
+            Serial1.println(F("[LoRa] To fix: run 'factory-reset' in CLI or clear EEPROM so defaults are written."));
+        } else {
+            devAddr = parseHexToUint32(devAddrBuf);
+            parseHexToBytes(nwkBuf, nwkSEncKey, 16);
+            parseHexToBytes(appSBuf, appSKey, 16);
+        }
+    }
+
+    // =====================================================
+    // ======================== CLASS ======================
+    // =====================================================
+
+    char classBuf[4] = {0};
+    strncpy(classBuf, cfg.lorawan.class_type, sizeof(classBuf)-1);
+    Serial1.print(F("\nClass               : "));
+    Serial1.println(classBuf);
+    if (classBuf[0] == '\0') {
+        Serial1.println(F("[LoRa] WARNING: class_type empty in EEPROM. Using default Class A."));
+        setMode(CLASS_A);
+    } else {
+        if (strcmp(classBuf, "C") == 0) setMode(CLASS_C);
+        else setMode(CLASS_A);
+    }
+
+    Serial1.println(F("\n[LoRa] Config Loaded Successfully"));
+    Serial1.println(F("====================================\n"));
+}
+
 // ===== LOOP =====
 void LoRaWan::loop(const char* payload) {
 
@@ -335,7 +489,6 @@ void LoRaWan::loop(const char* payload) {
             
             size_t idx = 0;
             for (size_t i = 0; i < len; i++) {
-                // ปริ้นต์ลง Serial Monitor
                 if (buf[i] < 0x10) Serial1.print('0');
                 Serial1.print(buf[i], HEX); Serial1.print(" ");
 
@@ -354,6 +507,7 @@ void LoRaWan::loop(const char* payload) {
             Serial1.println(F("============================"));
         }
     }
+    Serial1.println(F("\n=================="));
 } 
 
 
@@ -364,6 +518,65 @@ bool LoRaWan::available() {
 const char* LoRaWan::getDownlink() {
     hasNewDownlink = false;
     return downlinkText;
+}
+
+void LoRaWan::sendNow(const char* payload) {
+    lastSend = millis();
+
+    Serial1.println(F("\n===== UPLINK (manual) ====="));
+    Serial1.print(F("Payload: "));
+    Serial1.println(payload);
+
+    uint8_t rxBuffer[255];
+    size_t rxLen = 0;
+
+    int16_t state = node.sendReceive(
+        (uint8_t*)payload,
+        strlen(payload),
+        currentFPort,
+        rxBuffer,
+        &rxLen,
+        currentAck
+    );
+
+    if (state >= RADIOLIB_ERR_NONE) {
+        Serial1.print(F("[UPLINK] Success! "));
+        if (state == 0) {
+            Serial1.println(F("(No Downlink)"));
+        } else if (state == 1 || state == 2) {
+            Serial1.print(F("(Downlink in RX")); Serial1.print(state); Serial1.println(F(")"));
+            if (rxLen > 0) {
+                Serial1.println(F("\n===== DOWNLINK RECEIVED (CLASS A) ====="));
+                Serial1.print(F("RAW HEX: "));
+
+                size_t idx = 0;
+                for (size_t i = 0; i < rxLen; i++) {
+                    if (rxBuffer[i] < 0x10) Serial1.print('0');
+                    Serial1.print(rxBuffer[i], HEX); Serial1.print(" ");
+
+                    if (idx < sizeof(downlinkText) - 2) {
+                        snprintf(&downlinkText[idx], 3, "%02X", rxBuffer[i]);
+                        idx += 2;
+                    }
+                }
+                Serial1.println();
+
+                downlinkText[idx] = '\0';
+                hasNewDownlink = true;
+
+                Serial1.print(F("STORED PAYLOAD: "));
+                Serial1.println(downlinkText);
+                Serial1.println(F("======================================="));
+            } else {
+                Serial1.println(F("-> (Network MAC Command / No Payload)"));
+            }
+        }
+    } else if (state == RADIOLIB_ERR_ACK_NOT_RECEIVED) {
+        Serial1.println(F("[UPLINK] NO ACK"));
+    } else {
+        Serial1.print(F("[UPLINK] ERROR CODE: "));
+        Serial1.println(state);
+    }
 }
 
 

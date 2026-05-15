@@ -46,6 +46,10 @@
 #define SD_SCK  PB13
 #define SD_CS   PA8
 
+// ===== ANALOG CONFIG =====
+#define ANALOG_PIN  PA4
+
+
 // ===== SD Card =====
 #define SD_MOSI PB15
 #define SD_MISO PB14
@@ -54,6 +58,8 @@
 
 // ===== LS Switch =====
 #define LS_SW_PIN PB5
+#define LS_SW_PORT  GPIOB
+
 
 // ===== Button CONFIG =====
 #define BUTTON_PIN PC13

@@ -25,7 +25,6 @@
               "register": "0x00",
               "length": 2,
               "byte_order": "AB",
-              "type": "uint16",
               "scale": 0.1
             },
             {
@@ -34,7 +33,6 @@
               "register": "0x02",
               "length": 2,
               "byte_order": "BA",
-              "type": "uint16",
               "scale": 0.1
             }
           ]
@@ -43,8 +41,6 @@
     },
     "oled": {
       "enabled": true,
-      "sda": "PB7",
-      "scl": "PB6",
       "address": "0x3C"
     },
     "led": {
@@ -103,10 +99,7 @@
       "startup_delay_ms": 10
     },
     "sht3": {
-      "enable": true,
-      "sda": "PB7",
-      "scl": "PB6",
-      "address": "0x44"
+      "enable": true
     }
   },
   "logging": {

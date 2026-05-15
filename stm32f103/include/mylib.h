@@ -3,29 +3,37 @@
 #pragma once
 #include <Arduino.h>
 #include <Wire.h>
-#include <U8g2lib.h>
+//#include <U8g2lib.h>
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>
+#include <stdint.h>
 #include <vector>
 #include <Adafruit_SHTC3.h>
 #include "device_config.h"
 #include <EEPROM.h>
+#include <RadioLib.h>
 
-
+extern bool isLogging;
 
 // ===================== LoRa P2P =====================
 class LoRaP2P {
 public:
-  void begin(float frequency);
-  void loadConfig(class SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
-  void send(const char* msg);
-  void sendBytes(uint8_t* data, size_t len);
+  LoRaP2P();
+  int16_t begin(float frequency);
 
-  String receive();
-  int receiveBytes(uint8_t* buffer, size_t len);
+  // send helpers
+  int16_t send(const char* msg);
+  int16_t sendBytes(const uint8_t* data, size_t len);
+
+  // receive helpers
+  String receive(uint32_t timeout = 1000);
+  int16_t receiveBytes(uint8_t* buffer, size_t len, uint32_t timeout = 1000);
+
+private:
+  Module module;
+  SX1278 radio;
 };
-
 // ===================== LoRa WAN =====================
 
 
@@ -38,7 +46,9 @@ class LoRaWan {
 public:
   void begin();
   void loop(const char* payload);
+  void sendNow(const char* payload);
   void loadConfig(const JsonObject& lora);
+  void loadConfigFromStruct(const LoRaCfg& lora_cfg);
   void setMode(LoRaClassMode mode);  
   void classC();
   void classA();
@@ -54,6 +64,9 @@ private:
   char downlinkText[256];
   bool hasNewDownlink = false;
 };
+
+// ===================== SD Resource Manager =====================
+
 class SDResourceManager {
 public:
     SDResourceManager(uint8_t mosi, uint8_t miso, uint8_t sck, uint8_t cs);
@@ -80,6 +93,9 @@ private:
     String _loraKey;
     int _pin;
 };
+
+// ===================== Logger =====================
+
 class Logger {
 private:
     SDResourceManager* _sd;
@@ -92,21 +108,6 @@ public:
     void logMixed(const char* type, const char* message, int count, ...);
 };
 // ===================== Display =====================
-// class Display {
-// public:
-//   void begin(uint8_t address);
-
-//   void clear();
-//   void setCursor(uint8_t x, uint8_t y);
-
-//   void print(const char* msg);
-//   void printAt(uint8_t x, uint8_t y, const char* msg);
-
-//   void update();
-
-// private:
-//   class Adafruit_SSD1306* _display; // forward declaration
-// };
 class OLED {
 public:
     void begin();
@@ -114,6 +115,7 @@ public:
     void clear();
     void update();
     void loadConfig(SDResourceManager& sd, const char* path = "/CONFIG~1.JSO");
+    void loadConfigFromStruct(const HardwareCfg& hw);
 
     // ---------------- TEXT ----------------
     void setFont(const uint8_t* font);
@@ -155,6 +157,7 @@ struct I2C_Device {
 class I2C {
 public:
     void loadConfig(const JsonObject& i2c);
+    void loadConfig(const I2CConfig& i2c_cfg);
     void master_begin();
     const char* master_loop();
     void slave_begin(uint8_t address);
@@ -179,9 +182,10 @@ private:
     static volatile int _idx;
     static void receiveEvent(int howMany);
     static void requestEvent();
-
+    uint32_t _max_resp_ms;
     static volatile uint8_t _currentRegister; 
     static uint8_t _registers[16]; 
+    void resetInternalConfig();
 };
 
 // ===================== RS485 =====================
@@ -261,27 +265,14 @@ private:
 
 
 // ================= ANALOG =================
-struct Analog420Config {
-  int pin;
-  float adcResolution;
-  float vref;
-
-  float shuntResistor;
-  float minCurrent;
-  float maxCurrent;
-
-  float outMin;
-  float outMax;
-
-  float multiplier;
-};
 
 class Analog420 {
 public:
   Analog420();
 
-  void begin(Analog420Config cfg);
-
+  void begin();
+  void loadConfigFromStruct(const HardwareCfg& hw);
+  void loadConfigFromJson(const JsonObject& analog);
   float readCurrent();
   float readVoltage();
   float readRaw();
@@ -294,21 +285,23 @@ private:
 // ===================== RS485 =====================
 class SDResourceManager;
 
-// เติม Prefix เพื่อป้องกันการชนกับ Macro ของระบบ
 enum PARITY_OPT { MB_PARITY_NONE = 0, MB_PARITY_ODD, MB_PARITY_EVEN };
 enum MODBUS_TYPE { MB_COIL = 1, MB_DISCRETE = 2, MB_HOLDING = 3, MB_INPUT = 4 };
 enum MB_BYTE_ORDER { BO_AB = 0, BO_BA, BO_ABCD, BO_CDBA, BO_BADC, BO_DCBA };
 
 struct RS485_CONF {
     bool ENABLE;
-    uint8_t STOP;
-    uint8_t DATA;
-    PARITY_OPT PARITY;
     uint32_t BAUD;
+    uint8_t STOP;
+    uint8_t DATA;        
     uint32_t INTERVAL;
     uint32_t MAX_RESP;
     uint8_t MAX_RETRY;
+    uint8_t PARITY;      
 };
+#ifndef MAX_MODBUS_CHANNELS
+#define MAX_MODBUS_CHANNELS 32
+#endif
 
 struct MODBUS_CH {
     uint8_t CH_ID;
@@ -317,7 +310,7 @@ struct MODBUS_CH {
     uint16_t ADDR;
     uint16_t QTY;
     MODBUS_TYPE TYPE;
-    MB_BYTE_ORDER ORDER; // 2. เปลี่ยนตรงนี้
+    MB_BYTE_ORDER ORDER; 
     bool SIGN;
 };
 
@@ -328,26 +321,28 @@ public:
     void ADD_CH(MODBUS_CH CH);
     bool FETCH(uint8_t ID);
     void FETCH_ALL();
-    uint32_t GET_DATA(uint8_t ID);
+    int32_t GET_DATA(uint8_t ID);                   
     uint8_t GET_CH_COUNT();
     MODBUS_CH* GET_CH(uint8_t index);
-    uint32_t GET_DATA_BY_INDEX(uint8_t index);
-    bool loadConfig(const JsonObject& rs485);
+    int32_t GET_DATA_BY_INDEX(uint8_t index);        
+    bool loadConfigFromJson(const JsonObject& rs485);
+    bool loadConfigFromStruct(const HardwareCfg& hw);
 
 private:
     HardwareSerial* _SERIAL; 
     uint8_t _DE_PIN;
     uint8_t _RE_PIN;
     RS485_CONF CFG;
-    MODBUS_CH CH_LIST[32];
-    uint32_t CH_DATA[32];
+    MODBUS_CH CH_LIST[MAX_MODBUS_CHANNELS];   
+    int32_t CH_DATA[MAX_MODBUS_CHANNELS];     
     uint8_t CH_COUNT;
 
     uint16_t CALC_CRC16(uint8_t* BUF, uint8_t LEN);
-    uint32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER);
+    int32_t APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER, bool SIGN);
     void TX_EN();
     void RX_EN();
 };
+
 
 extern "C" {
   #include "stm32f1xx_hal.h"
@@ -365,6 +360,8 @@ typedef struct {
     uint32_t STARTUP_DELAY;
 } LS_CONF;
 
+// ===================== Low Side Switch =====================
+
 class LowSideSwitch {
 private:
     LS_CONF conf;
@@ -372,7 +369,8 @@ private:
 public:
     LowSideSwitch();
 
-    bool loadConfig(const JsonObject& sw);
+    bool loadConfigFromJson(const JsonObject& sw);
+    bool loadConfigFromStruct(const HardwareCfg& hw);
     void begin();
 
     void on();
@@ -396,6 +394,7 @@ private:
 public:
 
     MySHTC3(TwoWire* wire, uint8_t sda, uint8_t scl);
+  bool loadConfigFromStruct(const HardwareCfg& hw);
 
     bool begin();
 
@@ -406,31 +405,56 @@ public:
     float getHumidity();
 };
 
-class ConfigManager {
+#define CLI_COLOR_RESET   "\x1b[0m"
+#define CLI_COLOR_RED     "\x1b[31m"
+#define CLI_COLOR_GREEN   "\x1b[32m"
+#define CLI_COLOR_YELLOW  "\x1b[33m"
+#define CLI_COLOR_CYAN    "\x1b[36m"
+#define CLI_COLOR_BOLD    "\x1b[1m"
+
+// ===================== Serial CLI =====================
+
+class SerialCLI {
 public:
-
-    DeviceConfig config;
-
-    bool load(const char* path);
-
-    bool save();
-
-    bool setValue(
-        const char* key,
-        const char* value
-    );
-
-    String getValue(
-        const char* key
-    );
-
-    void print(Stream& serial);
-    void clearOverrides();
-    void apply();
+  void begin(Stream& serial, ConfigManager& cfgMgr, SDResourceManager* sd = nullptr, LowSideSwitch* ls = nullptr, LoRaWan* lorawan = nullptr);
+  void update();
+  void printPrompt();
 
 private:
+  Stream* _serial;
+  ConfigManager* _cfgMgr;
+  SDResourceManager* _sd;
+  LowSideSwitch* _ls;
+  LoRaWan* _lorawan;
+  String _buffer;
 
-    void loadOverrides();
+  // Core CLI
+  void processCommand(String cmdLine);
+  void printHelp();
+  void clearScreen();
+  void printSuccess(const char* msg);
+  void printError(const char* msg);
+  void handleSetLogging(String key, String value);
+  void handleSetComm(String key, String value);
+
+  void handleSetCommand(String args);
+  void handleSetDevice(String key, String value);
+  void handleSetLoRa(String key, String value);
+  void handleSetHardware(String key, String value);
+
+  // --- Show Handlers ---
+  void showConfig(String category);
+  void showSDConfig();
+  void showDeviceConfig();
+  void showLoRaConfig();
+  void showHardwareConfig();
+  void showCommunicationConfig();
+  void showLoggingConfig();
+
+  // System commands
+  void rebootSystem();
+  void factoryReset();
 };
+
 
 #endif

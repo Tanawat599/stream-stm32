@@ -46,6 +46,7 @@ bool MySHTC3::read() {
     return true;
 }
 
+
 float MySHTC3::getTemperature() {
     return _temperature;
 }

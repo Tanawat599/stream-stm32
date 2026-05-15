@@ -37,7 +37,7 @@ void SDResourceManager::listFiles(Stream& serial, const char* dirName, int numTa
 }
 
 const char* SDResourceManager::getConfig() {
-    static char result[32];  // buffer คงที่
+    static char result[32];  
 
     File root = SD.open("/");
     if (!root) {
@@ -175,7 +175,7 @@ void Logger::logKV(const char* type, int count, ...) {
 
     for (int i = 0; i < count; i++) {
         const char* key = va_arg(args, const char*);
-        float value = va_arg(args, double); // float → double
+        double value = va_arg(args, double);
         const char* unit = va_arg(args, const char*);
 
         offset += sprintf(buffer + offset, "%s=%.2f%s ", key, value, unit);
@@ -205,7 +205,7 @@ void Logger::logMixed(const char* type, const char* message, int count, ...) {
 
     for (int i = 0; i < count; i++) {
         const char* key = va_arg(args, const char*);
-        float value = va_arg(args, double);
+        double value = va_arg(args, double);
         const char* unit = va_arg(args, const char*);
 
         offset += sprintf(buffer + offset, "%s=%.2f%s ", key, value, unit);

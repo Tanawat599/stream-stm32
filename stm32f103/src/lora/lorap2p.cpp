@@ -1,4 +1,5 @@
-#include "lorap2p.h"
+#include "mylib.h"
+#include "config.h"
 
 LoRaP2P::LoRaP2P(): module(LORA_SS_PIN, LORA_DIO0_PIN, LORA_RST_PIN, LORA_DIO1_PIN), radio(&module) {}
 
