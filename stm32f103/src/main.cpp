@@ -25,7 +25,7 @@ bool sht3Enabled = false;
 bool sd_ready = false;
 
 String displayText = "";
-static char main_payload[256];
+static char main_payload[192];
 static char modbus_payload[128];
 const char* downlink_payload = nullptr;
 bool isLogging = true;
@@ -55,15 +55,12 @@ String getChargeStatus() {
 
     bool chrg = digitalRead(CHRG_PIN);
     bool done = digitalRead(DONE_PIN);
-
-    // active low
     if (!chrg && done) {
         return "Charging";
     }
     if (chrg && !done) {
         return "Charge Full";
     }
-
     return "Idle";
 }
 void spiInitForSD() {
@@ -103,9 +100,6 @@ void setup() {
     analogReadResolution(12);
 
     // ===== SD SPI Init =====
-    // SPI.setSCLK(SD_SCK);
-    // SPI.setMISO(SD_MISO);
-    // SPI.setMOSI(SD_MOSI);
     SPI.begin(); 
 
     sd_ready = sd.begin();
@@ -232,21 +226,16 @@ void setup() {
         if (sd_ready && cfg.logging.enabled && cfg.logging.sd_log) {
             spiInitForSD();
             logger.logMsg("INFO", "System boot completed");
-            logger.logKV("HW_STATE", 4,
-            "i2c", i2cEnabled ? 1.0 : 0.0, "",
-            "modbus", modbus_rs485Enabled ? 1.0 : 0.0, "",
-            "oled", oledEnabled ? 1.0 : 0.0, "",
-            "sht3", sht3Enabled ? 1.0 : 0.0, "");
-            logger.logMsg("INFO", "System boot done");
             spiDeinitForSD();
             
         }
         lorawan.loadConfigFromStruct(cfg.lora);
         
     }
-    // =========================================================
 
-    // ===== INIT COMMON HARDWARE =====
+    // =========================================================
+    //                Enable Peripherals Based on Config
+    // =========================================================
     if (oledEnabled) {
         delay(50);
         // oled.begin();
@@ -271,13 +260,15 @@ void setup() {
     SPI.begin(); 
     
     lorawan.begin();
-
     Serial1.println("[SYSTEM] Ready. Press ANY KEY to enter CLI.");
     cli.printPrompt(); 
+
+
 }
 void loop() {
     static unsigned long lastLogTime = 0;  
     const unsigned long LOG_INTERVAL = 30000;
+
 
     if (isLogging && Serial1.available() > 0) {
         isLogging = false; 
@@ -356,8 +347,6 @@ void loop() {
                     logger.logMsg("UPLINK_PAYLOAD", main_payload);
                     spiDeinitForSD();
                     lastLogTime = millis();
-                } else {
-                    return; 
                 }
             }
             // ===== LoRaWAN Process (Uplink & Downlink) =====
@@ -421,7 +410,6 @@ void loop() {
                             if (len > 2 && oledEnabled) {
                                 char textBuffer[32] = {0}; 
                                 int textIdx = 0;
-                                
                                 for (int i = 2; i < len && textIdx < 31; i += 2) {
                                     char hexChar[3] = {downlink_payload[i], downlink_payload[i+1], '\0'};
                                     textBuffer[textIdx++] = (char)strtol(hexChar, NULL, 16);

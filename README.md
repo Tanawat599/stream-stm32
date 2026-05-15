@@ -1,111 +1,207 @@
-<p align="center">
-  <h1>stream-stm32</h1>
-  <p>Empowering real-time data streaming on STM32 microcontrollers with robust, high-performance embedded firmware.</p>
-  <p align="center">
-    <img alt="Build Status" src="https://img.shields.io/badge/build-passing-brightgreen.svg" />
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
-    <img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" />
-    <img alt="GitHub Stars" src="https://img.shields.io/github/stars/user/repo?style=social" />
-  </p>
-</p>
+# LoRa Node Firmware for STM32F103
+
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-STM32-blue)](https://platformio.org/)
+[![LoRaWAN](https://img.shields.io/badge/LoRaWAN-1.0.3-green)](https://lora-alliance.org/)
+
+Firmware for an industrial IoT LoRaWAN node with multi-sensor support (I2C, Modbus RTU, SHT3, 4-20mA), SD card logging, OLED display, and a full serial CLI.
+
+Built for **STM32F103C8/CB (Blue Pill)** using PlatformIO.
 
 ---
 
-## The Strategic "Why" (Overview)
+# Features
 
-> Developing efficient, reliable, and real-time capable firmware for embedded devices, especially for critical data streaming applications, often presents significant challenges. Resource constraints, precise timing requirements, and the need for robust error handling can lead to complex development cycles and brittle solutions. Traditional approaches can struggle to meet the demands of modern stream-processing nodes, leading to suboptimal performance and extended time-to-market.
+- **LoRaWAN 1.0.3**
+  - ABP / OTAA
+  - Class A/C
+  - Adaptive Data Rate (ADR)
+  - Confirmed / unconfirmed uplinks
 
-The `stream-stm32` project provides a meticulously engineered firmware solution specifically tailored for STM32 microcontrollers, designed to power `stream-node` applications. By leveraging the power of C++ and the versatility of the STM32 architecture, this firmware delivers optimized performance, low-latency data processing, and a rock-solid foundation for dependable real-time streaming experiences. It abstracts away much of the low-level complexity, allowing developers to focus on the application logic rather than intricate hardware interactions, thereby accelerating development and enhancing reliability.
+- **Multi-sensor acquisition**
+  - I2C master – up to 8 devices, each with 8 channels
+  - Modbus RTU master (RS485)
+  - On-board SHT3 temperature & humidity sensor
+  - 4-20mA analog input with voltage scaling
 
-## Key Features
+- **Low-side switch output**
+  - Configurable logic
+  - Open-drain / push-pull
+  - Startup delay support
 
-*   ⚡ **High-Performance Data Throughput**: Engineered for maximum efficiency, ensuring your streaming applications achieve optimal data rates and minimal latency on STM32 devices.
-*   🔒 **Robust & Reliable Operation**: Implements advanced error handling and resilient logic, guaranteeing stable performance even in demanding real-world conditions.
-*   ⚙️ **STM32 Optimized Architecture**: Tailored specifically for the STM32 family, taking full advantage of the microcontroller's peripherals and processing power for unparalleled efficiency.
-*   🧩 **Modular & Extensible Design**: Built with a clear, modular structure, making it straightforward to integrate into existing projects or extend with new functionalities without extensive refactoring.
-*   🚀 **Accelerated Development with Arduino_STM32**: Leverages the `arduino_stm32` core, simplifying the development process and providing access to a rich ecosystem of libraries and community support.
-*   ⏱️ **Real-Time Processing Capabilities**: Designed for applications requiring precise timing and immediate data response, crucial for many streaming scenarios in IoT, industrial control, and sensor networks.
+- **OLED display**
+  - 128×64 SSD1306 over I2C
+  - System status & downlink message display
 
-## Technical Architecture
+- **SD card support**
+  - FAT32
+  - Store `config.json`
+  - Event logging (uplink/downlink/errors)
 
-The `stream-stm32` project is built upon a robust foundation, combining high-performance programming with industry-standard embedded development tools.
+- **Serial CLI**
+  - VT100 compatible
+  - 115200 baud
 
-| Technology      | Purpose                               | Key Benefit                                     |
-| :-------------- | :------------------------------------ | :---------------------------------------------- |
-| C++             | Primary Firmware Development Language | Performance, low-level control, efficiency      |
-| STM32           | Target Microcontroller Platform       | Powerful, versatile, industry-standard          |
-| Arduino_STM32   | Development Framework/Core            | Simplified development, extensive libraries     |
-| Generic Software Environment | Development Ecosystem | Flexibility for various toolchains and IDEs |
+- **Battery monitoring**
+  - Voltage
+  - Current sensing
+  - TP4056 charging status
 
-```
+- **Watchdog**
+  - Automatic reboot using IWDG
+
+---
+
+# Source File Descriptions
+
+| File | Description |
+|---|---|
+| `cli/serial_cli.cpp` | Implements the serial command line interface (CLI) for configuration, debugging, and runtime control over UART. |
+| `communication/i2c.cpp` | Handles I2C communication, sensor polling, device scanning, and register-based data acquisition. |
+| `communication/modbus_rs485.cpp` | Implements Modbus RTU master communication over RS485 for external industrial sensors and slave devices. |
+| `config/config.cpp` | Loads, parses, validates, and stores system configuration from EEPROM or SD card (`config.json`). |
+| `display/oled.cpp` | Controls the SSD1306 OLED display and renders system status, sensor values, and downlink messages. |
+| `io/analog.cpp` | Reads analog inputs (0–3.3V / 4–20mA) using the STM32 ADC and applies scaling/conversion logic. |
+| `io/ls_switch.cpp` | Controls the low-side switch output, including startup behavior and output state management. |
+| `io/sht3_sensor.cpp` | Reads temperature and humidity data from the onboard SHT3 sensor via I2C. |
+| `lora/lorap2p.cpp` | Provides LoRa point-to-point (P2P) communication support for non-LoRaWAN operation. |
+| `lora/lorawan.cpp` | Implements LoRaWAN functionality including OTAA/ABP join, uplink/downlink handling, ADR, and MAC processing. |
+| `sd_card/sdcard.cpp` | Handles SD card initialization, file operations, configuration loading, and event logging. |
+| `main.cpp` | Main firmware entry point. Initializes peripherals, loads configuration, and runs the primary application loop. |
+
+---
+
+# Downlink Commands
+
+| Command | Description | Example |
+|---|---|---|
+| `0x01` | Control LED | `0101` = ON, `0100` = OFF |
+| `0x02` | Control Low-Side Switch | `020101` |
+| `0x03` | Display text on OLED | `0348656C6C6F` → "Hello" |
+
+---
+
+# Hardware Requirements & Pin Mapping
+
+| Component | STM32F103 Pin | Notes |
+|---|---|---|
+| LoRa NSS | `PB11` | |
+| LoRa RST | `PB12` | |
+| LoRa DIO0 | `PB0` | |
+| SD CS | `PA8` | Verify conflict with LoRa reset |
+| SD SCK | `PB13` | |
+| SD MISO | `PB14` | |
+| SD MOSI | `PB15` | |
+| I2C SCL | `PB6` | 4.7kΩ pull-up required |
+| I2C SDA | `PB7` | 4.7kΩ pull-up required |
+| RS485 DE | `PB9` | |
+| RS485 RE | `PB8` | |
+| Analog Input | `PA4` | 0–3.3V ADC |
+| Low-Side Switch | `PB5` | |
+| LED (active low) | `PA12` | On-board LED |
+| Button (optional) | `PC13` | Enter CLI mode |
+
+> Verify all pin definitions in `config.h` before deployment.
+
+---
+
+# Project Structure
+
+```text
+stm32f103
 .
-├── 📁 arduino_stm32/             # Arduino core for STM32 microcontrollers
-├── 📁 stm32f103/                # Project-specific code or configurations for STM32F103
-├── 📄 .DS_Store                 # macOS directory services store file (can be safely ignored)
-├── 📄 .gitattributes            # Git attributes for repository configuration
-└── 📄 README.md                 # Project README file
+├── include
+│   ├── README
+│   ├── config.h
+│   ├── device_config.h
+│   └── mylib.h
+├── lib
+│   └── README
+├── platformio.ini
+├── sd_card
+│   └── config.json
+├── src
+│   ├── backup
+│   │   └── *.bak
+│   ├── cli
+│   │   └── serial_cli.cpp
+│   ├── communication
+│   │   ├── i2c.cpp
+│   │   └── modbus_rs485.cpp
+│   ├── config
+│   │   └── config.cpp
+│   ├── display
+│   │   └── oled.cpp
+│   ├── io
+│   │   ├── analog.cpp
+│   │   ├── ls_switch.cpp
+│   │   └── sht3_sensor.cpp
+│   ├── lora
+│   │   ├── lorap2p.cpp
+│   │   └── lorawan.cpp
+│   ├── sd_card
+│   │   └── sdcard.cpp
+│   ├── main.cpp
+│   └── stm32f103.code-workspace
+└── test
+    └── README
 ```
 
-## Operational Setup
+---
 
-### Prerequisites
+# Configuration Sources
 
-Before you begin, ensure you have the following installed and configured:
+The firmware supports two configuration sources:
 
-*   **Arduino IDE**: Version 1.8.19 or newer.
-*   **STM32CubeProgrammer**: For flashing the compiled firmware onto your STM32 device.
-*   **STM32 Arduino Core**: Installed via the Arduino IDE Boards Manager.
-*   **GCC ARM Embedded Toolchain**: Required for compiling C++ code for ARM-based microcontrollers.
+1. **EEPROM (default)**
+   - Saved via CLI commands
+   - Example: `set ...` → `save`
 
-### Installation
+2. **SD Card**
+   - Enable using:
+     ```cpp
+     device.use_sd_config = true;
+     ```
+   - Reads `/config.json` from SD card root
+   - Overrides EEPROM settings
 
-Follow these steps to get `stream-stm32` up and running on your STM32 device:
+---
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/your-username/stream-stm32.git
-    cd stream-stm32
-    ```
+# Documentation
 
-2.  **Configure Arduino IDE for STM32**:
-    *   Open the Arduino IDE.
-    *   Go to `File > Preferences`.
-    *   In "Additional Boards Manager URLs", add: `https://raw.githubusercontent.com/stm32duino/BoardManagerFiles/main/package_stm_index.json`
-    *   Go to `Tools > Board > Boards Manager...`.
-    *   Search for "STM32" and install "STM32 MCU based boards by STMicroelectronics".
+Additional project documentation, architecture notes, and configuration references are available here:
 
-3.  **Select Your Board**:
-    *   Go to `Tools > Board > STM32 boards (selected from submenu)`.
-    *   Select the appropriate board for your setup, e.g., "Generic STM32F103C series".
-    *   Configure other board options (e.g., CPU speed, upload method) as per your specific STM32F103 board documentation.
+- [Project Documentation](https://1drv.ms/w/c/8a9037343536ec56/IQDEORJlU61uTK86r0NgJ6iZAT8GpFkhxgMwAoE4rJOQ1-M?e=SzrAQA)
 
-4.  **Open and Compile the Firmware**:
-    *   Navigate to the `stm32f103/` directory within the cloned repository. You will find your main `.ino` sketch file here (e.g., `main.ino` or `stream_node.ino`).
-    *   Open the main sketch file in the Arduino IDE.
-    *   Click the "Verify" button (checkmark icon) to compile the code.
 
-5.  **Upload to STM32**:
-    *   Connect your STM32 board to your computer via USB (or appropriate programming interface like ST-Link).
-    *   Ensure the correct port is selected under `Tools > Port`.
-    *   Click the "Upload" button (right arrow icon) to flash the compiled firmware to your STM32 device.
+---
 
-### Environment
+# Example `config.json`
 
-No explicit `.env` or dedicated configuration files are present in the root directory for this project. Configuration is typically managed within the C++ source files (e.g., header definitions, constants) or through build-time parameters specific to the STM32 development environment and the Arduino IDE settings.
-
-## Community & Governance
-
-### Contributing
-
-We welcome contributions from the community to enhance `stream-stm32`! If you have suggestions, bug reports, or want to contribute code, please follow these guidelines:
-
-1.  **Fork** the repository.
-2.  **Create a new branch** for your feature or bug fix: `git checkout -b feature/your-feature-name` or `bugfix/issue-description`.
-3.  **Make your changes**, ensuring your code adheres to the existing style and conventions.
-4.  **Commit your changes** with a clear and descriptive message: `git commit -m "feat: Add new streaming protocol support"` or `fix: Resolve data corruption issue`.
-5.  **Push** your branch to your forked repository.
-6.  **Open a Pull Request** against the `main` branch of this repository, providing a detailed description of your changes and their benefits.
-
-### License
-
-This project is licensed under the MIT License. A copy of the license can typically be found in the `LICENSE` file within the repository root. This license permits free use, modification, and distribution, with attribution, for both commercial and non-commercial purposes. Please refer to the `LICENSE` file for full legal details and conditions.
+```json
+{
+  "hardware": {
+    "i2c": {
+      "enable": true,
+      "frequency": 100000,
+      "interval_ms": 2000,
+      "devices": [
+        {
+          "id": 1,
+          "name": "sensor_1",
+          "address": "0x40",
+          "channels": [
+            {
+              "id": 1,
+              "name": "temperature",
+              "register": "0x00",
+              "length": 2,
+              "byte_order": "AB",
+              "scale": 0.1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```

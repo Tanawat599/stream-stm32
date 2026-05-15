@@ -1,5 +1,5 @@
-#ifndef MYLIB_H
-#define MYLIB_H
+// #ifndef MYLIB_H
+// #define MYLIB_H
 #pragma once
 #include <Arduino.h>
 #include <Wire.h>
@@ -57,7 +57,9 @@ public:
   const char* getDownlink();
   bool downlinkHandle();
   bool canSend();
-  
+  uint8_t  _txPower;
+  uint32_t _rx2Freq;
+  uint8_t  _rx2Dr;
 
 private:
   LoRaClassMode currentMode = CLASS_C; 
@@ -457,4 +459,4 @@ private:
 };
 
 
-#endif
+// #endif

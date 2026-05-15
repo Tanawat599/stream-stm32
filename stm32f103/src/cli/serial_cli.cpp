@@ -1,5 +1,30 @@
+/**
+ * @file serial_cli.cpp
+ * @brief Serial Command Line Interface (CLI) for configuring the LoRa Node on STM32.
+ * 
+ * This file implements a VT100 compatible serial CLI that allows the user to:
+ * - View and modify device, hardware, LoRaWAN, logging, and communication settings.
+ * - Save configuration to EEPROM.
+ * - Reboot, factory reset, and control hardware (LED, LS switch) interactively.
+ * - Read/write SD card files (if available).
+ * - Send manual LoRaWAN uplinks.
+ * 
+ * The CLI is active when `isLogging` is false (entered by pressing any key during normal operation).
+ * Commands are processed in `processCommand()` and dispatched to appropriate handlers.
+ */
+
 #include "mylib.h"
 #include "device_config.h"
+
+// ======================== Initialization ========================
+/**
+ * @brief Initialize the CLI with references to system components.
+ * @param serial Reference to the Stream (usually Serial1) for input/output.
+ * @param cfgMgr Reference to the ConfigManager for accessing device configuration.
+ * @param sd Pointer to SDResourceManager (may be null if SD not available).
+ * @param ls Pointer to LowSideSwitch (may be null).
+ * @param lorawan Pointer to LoRaWan object (may be null).
+ */
 
 void SerialCLI::begin(Stream& serial, ConfigManager& cfgMgr, SDResourceManager* sd, LowSideSwitch* ls, LoRaWan* lorawan) {
     _serial = &serial;
@@ -20,6 +45,14 @@ void SerialCLI::begin(Stream& serial, ConfigManager& cfgMgr, SDResourceManager* 
     printPrompt();
 }
 
+// ======================== Main update loop ========================
+/**
+ * @brief Polls the serial port, handles character input, line editing, and command execution.
+ * 
+ * This method must be called frequently (e.g., in loop() when CLI mode is active).
+ * It reads characters, echoes them back, handles backspace, and when Enter is pressed,
+ * it passes the command line to `processCommand()`.
+ */
 void SerialCLI::update() {
     while (_serial->available()) {
         char c = _serial->read();
@@ -47,11 +80,22 @@ void SerialCLI::update() {
     }
 }
 
+/**
+ * @brief Clear the terminal screen using ANSI escape codes.
+ */
 void SerialCLI::clearScreen() {
     _serial->print("\x1b[2J"); // Clear screen
     _serial->print("\x1b[H");  // Move cursor to top-left
 }
 
+// ======================== Command Dispatcher ========================
+/**
+ * @brief Parse and execute a command line.
+ * @param cmdLine The full command string (e.g., "set device.name MyNode").
+ * 
+ * Recognized commands: help, show, exit/resume, set, save, factory-reset, reboot,
+ * sd.list, sd.read, sd.config, uplink, toggle, i2c scan.
+ */
 void SerialCLI::processCommand(String cmdLine) {
     cmdLine.trim();
     if (cmdLine.length() == 0) return;
@@ -111,29 +155,33 @@ void SerialCLI::processCommand(String cmdLine) {
     else if (cmd == "reboot") {
         rebootSystem();
     } 
-    else if (cmd == "i2c" && args == "scan") {
-        _serial->println("Scanning I2C bus...");
-        byte error, address;
-        int nDevices = 0;
-        for(address = 1; address < 127; address++ ) {
-            Wire.beginTransmission(address);
-            error = Wire.endTransmission();
-            if (error == 0) {
-                _serial->print("I2C device found at address 0x");
-                if (address < 16) _serial->print("0");
-                _serial->println(address, HEX);
-                nDevices++;
-            }
-        }
-        if (nDevices == 0) _serial->println("No I2C devices found\n");
-        else _serial->println("done\n");
-    }
+    // else if (cmd == "i2c" && args == "scan") {
+    //     _serial->println("Scanning I2C bus...");
+    //     byte error, address;
+    //     int nDevices = 0;
+    //     for(address = 1; address < 127; address++ ) {
+    //         Wire.beginTransmission(address);
+    //         error = Wire.endTransmission();
+    //         if (error == 0) {
+    //             _serial->print("I2C device found at address 0x");
+    //             if (address < 16) _serial->print("0");
+    //             _serial->println(address, HEX);
+    //             nDevices++;
+    //         }
+    //     }
+    //     if (nDevices == 0) _serial->println("No I2C devices found\n");
+    //     else _serial->println("done\n");
+    // }
     else {
         printError("Unknown command.");
     }
 }
 
-
+// ======================== Set Command Handling ========================
+/**
+ * @brief Handle the 'set' command: dispatch to category-specific handler.
+ * @param args The arguments after "set", e.g., "device.name MyNode".
+ */
 void SerialCLI::handleSetCommand(String args) {
     int spaceIndex = args.indexOf(' ');
     if (spaceIndex == -1) {
@@ -620,7 +668,12 @@ void SerialCLI::handleSetLoRa(String key, String value) {
         printError("Unknown key in 'lora'. Check 'show lora' for available keys.");
     }
 }
-// ================= SHOW CONFIG =================
+
+// ======================== Show Configuration ========================
+/**
+ * @brief Display current configuration based on category.
+ * @param category "all", "device", "lora", "hw", "comm", "log", or "sd".
+ */
 void SerialCLI::showConfig(String category) {
     category.toLowerCase();
     

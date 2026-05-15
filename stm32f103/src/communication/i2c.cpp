@@ -1,6 +1,16 @@
+/**
+ * @file i2c.cpp
+ * @brief I2C module supporting both Master and Slave modes on STM32F103
+ * 
+ * This file implements:
+ * - I2C Master: reading data from multiple sensors with multiple channels (registers)
+ * - I2C Slave: simulating a sensor (temperature, humidity) for testing
+ * - Load configuration from JSON (SD card) or struct (EEPROM)
+ * - Endianness handling (AB/BA) and scaling of raw data
+ */
+
 #include "mylib.h"
 
-// Initialize static members
 volatile bool I2C::_newData = false;
 char I2C::_buffer[32];
 volatile int I2C::_idx = 0;
@@ -10,10 +20,16 @@ uint8_t I2C::_registers[16] = {0};
 
 static uint16_t sensorTemp = 255;
 static uint16_t sensorHumid = 600;
+
 // ==========================================
-// ===== Master Logic =====
+// ========== I2C Master Logic =============
 // ==========================================
 
+/*! @brief Initialise I2C Master (call in setup)
+ *  - Starts the Wire library
+ *  - Sets I2C clock frequency (if defined)
+ *  - Prints status via Serial1
+ */
 void I2C::master_begin() {
 Wire.begin();
     if (_frequency > 0) {
@@ -25,6 +41,13 @@ Wire.begin();
     Serial1.println(F(" Hz"));
     Serial1.println();
 }
+
+/*! @brief Load configuration from a JSON object (used when reading config from SD card)
+ *  @param i2c JsonObject containing the I2C configuration structure
+ *  - Reads basic parameters: enable, frequency, interval_ms, max_retry, max_resp_ms
+ *  - Reads array of devices; each device has address, name, and channels
+ *  - Each channel has name, register (reg_addr), length, byte_order, scale
+ */
 void I2C::loadConfig(const JsonObject& i2c) {
     Serial1.println(F("\n[I2C] Loading Config..."));
 
@@ -40,7 +63,6 @@ void I2C::loadConfig(const JsonObject& i2c) {
     _interval_ms = i2c["interval_ms"] | 2000;
     _max_retry   = i2c["max_retry"] | 3;
 
-    // +++ เพิ่มสองบรรทัดนี้ +++
     _max_resp_ms = i2c["max_resp_ms"] | 1000;
     //_master_address = parseHex(i2c["master_address"] | "0x08");
 
@@ -96,6 +118,10 @@ void I2C::loadConfig(const JsonObject& i2c) {
     }
     Serial1.println(F("[I2C] Config Load Complete!\n"));
 }
+/*! @brief Check if a device name is valid (not null, not empty, printable characters)
+ *  @param name Device name to check
+ *  @return true if name is valid
+ */
 static bool isValidName(const char* name) {
     if (name == nullptr || name[0] == '\0') return false;
     for (int i = 0; i < 32; i++) {  
@@ -104,8 +130,14 @@ static bool isValidName(const char* name) {
     }
     return false;
 }
+/*! @brief Load configuration from an I2CConfig struct (used when config comes from EEPROM)
+ *  @param i2c_cfg struct defined in device_config.h
+ *  - Resets internal configuration before loading
+ *  - Reads basic parameters
+ *  - Iterates over devices and channels from arrays inside the struct
+ */
 void I2C::loadConfig(const I2CConfig& i2c_cfg) {
-    resetInternalConfig();  // เรียก clear ก่อน
+    resetInternalConfig(); 
 
     _enabled     = i2c_cfg.enable;
     _frequency   = i2c_cfg.frequency;
@@ -194,6 +226,13 @@ void I2C::loadConfig(const I2CConfig& i2c_cfg) {
     }
 }
 
+/*! @brief Main function called in loop() to read all I2C devices
+ *  @return Pointer to a buffer containing the formatted payload, or "" if nothing read
+ *  - Operates according to the polling interval (_interval_ms)
+ *  - Reads each channel using readRegister()
+ *  - Converts raw data with processRawData() and scales it
+ *  - Builds a text payload of the form: ">>> device [addr]\n - channel: value"
+ */
 const char* I2C::master_loop() {
     static char payload[512];
     memset(payload, 0, sizeof(payload));
@@ -237,6 +276,21 @@ const char* I2C::master_loop() {
 
     return payload;
 }
+
+/*! @brief Read data from a register of an I2C slave
+ *  @param devAddr 7-bit I2C address of the slave
+ *  @param regAddr Register address to read from
+ *  @param buffer Buffer to store the read data
+ *  @param len Number of bytes to read
+ *  @return true if read succeeded, false on error or timeout
+ *  
+ *  Procedure:
+ *  1. Send register address using Repeated Start (endTransmission(false))
+ *  2. Request len bytes via requestFrom()
+ *  3. Read data into buffer
+ *  4. Implements retry and timeout according to _max_retry and _max_resp_ms
+ *  5. On error code 4 (bus busy), resets the I2C bus
+ */
 bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_t len) {
     uint32_t startTime = millis();
     for (int r = 0; r < _max_retry && (millis() - startTime) < _max_resp_ms; r++) {
@@ -279,6 +333,13 @@ bool I2C::readRegister(uint8_t devAddr, uint8_t regAddr, uint8_t* buffer, uint8_
                    devAddr, regAddr, _max_retry);
     return false;
 }
+
+/*! @brief Convert raw multi-byte data to uint32_t according to specified endianness
+ *  @param data Array of bytes (size len)
+ *  @param len Number of bytes (1-4)
+ *  @param order "AB" = big-endian (MSB first), "BA" = little-endian (LSB first)
+ *  @return Converted uint32_t value
+ */
 uint32_t I2C::processRawData(uint8_t* data, uint8_t len, String order) {
     if (len == 0 || len > 4) return 0;  
     
@@ -296,17 +357,25 @@ uint32_t I2C::processRawData(uint8_t* data, uint8_t len, String order) {
     return val;
 }
 
+/*! @brief Convert a hexadecimal string (optionally prefixed with 0x) to uint8_t
+ *  @param str Input string, e.g., "0x40" or "40"
+ *  @return Converted uint8_t value (0 if invalid)
+ */
 uint8_t I2C::parseHex(const char* str) {
     if (!str) return 0;
     return (uint8_t)strtol(str, NULL, 0);
 }
 
 // ==========================================
-// ===== Slave Logic (Sensor Simulator) =====
+// ========== I2C Slave Logic (for testing) =
 // ==========================================
 
-
-
+/*! @brief Initialise I2C Slave mode to simulate a sensor
+ *  @param address I2C address of the slave
+ *  - Register 0x00-0x01: temperature (2 bytes)
+ *  - Register 0x02-0x03: humidity (2 bytes)
+ *  - Uses static sensorTemp and sensorHumid as raw values
+ */
 void I2C::slave_begin(uint8_t address) {
     Wire.begin(address);
     Wire.onReceive(receiveEvent); 

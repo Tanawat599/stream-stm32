@@ -1,5 +1,31 @@
+/**
+ * @file modbus_rs485.cpp
+ * @brief Modbus RTU Master implementation for RS485 communication.
+ * 
+ * This file provides a Modbus RTU master class for STM32F103.
+ * It supports:
+ * - Configurable baud rate, parity, stop bits, data bits.
+ * - Reading holding registers (and optionally input registers, coils, discrete inputs).
+ * - Automatic byte order conversion (AB, BA, ABCD, CDBA, BADC, DCBA).
+ * - Signed/unsigned 16‑bit and 32‑bit values.
+ * - Retry and timeout handling.
+ * - Configuration loading from JSON (SD card) or struct (EEPROM).
+ * - Multiple channels (each channel defines a register block to read).
+ */
+
 #include "mylib.h"
 
+/* ========================= Constructor & Initialization ========================= */
+
+/**
+ * @brief Construct a new MODBUS_RS485 object.
+ * @param PORT HardwareSerial port used for RS485 (e.g., &Serial2)
+ * @param DE_PIN GPIO pin for Driver Enable (DE)
+ * @param RE_PIN GPIO pin for Receiver Enable (RE)
+ * 
+ * Usually DE and RE are connected together and driven by a single pin.
+ * The class will set DE/RE HIGH before transmitting and LOW after.
+ */
 MODBUS_RS485::MODBUS_RS485(HardwareSerial* PORT, uint8_t DE_PIN, uint8_t RE_PIN) {
     _SERIAL = PORT;
     _DE_PIN = DE_PIN;
@@ -8,6 +34,14 @@ MODBUS_RS485::MODBUS_RS485(HardwareSerial* PORT, uint8_t DE_PIN, uint8_t RE_PIN)
     for (int i = 0; i < MAX_MODBUS_CHANNELS; i++) CH_DATA[i] = 0;
 }
 
+/**
+ * @brief Initialize the Modbus master hardware and communication parameters.
+ * @param CONF RS485_CONF structure containing baud, parity, data bits, stop bits,
+ *            interval, max response time, max retries, and enable flag.
+ * 
+ * Configures the DE/RE pins as outputs, sets the serial port mode, and starts
+ * the UART at the desired baud rate.
+ */
 void MODBUS_RS485::INIT(RS485_CONF CONF) {
     CFG = CONF;
     if (!CFG.ENABLE) return;
@@ -41,6 +75,15 @@ void MODBUS_RS485::INIT(RS485_CONF CONF) {
     _SERIAL->begin(CFG.BAUD, MODE);
 }
 
+/* ========================= Channel Management ========================= */
+
+/**
+ * @brief Add a channel definition to the master's channel list.
+ * @param CH MODBUS_CH structure containing slave ID, register address, quantity,
+ *           data type, byte order, and signedness.
+ * 
+ * Channels are stored internally. FETCH_ALL() will iterate over all added channels.
+ */
 void MODBUS_RS485::ADD_CH(MODBUS_CH CH) {
     if (CH_COUNT < MAX_MODBUS_CHANNELS) {
         CH_LIST[CH_COUNT] = CH;
@@ -48,6 +91,11 @@ void MODBUS_RS485::ADD_CH(MODBUS_CH CH) {
     }
 }
 
+/**
+ * @brief Retrieve the last read value for a given channel ID.
+ * @param ID Channel identifier (user‑assigned ID, not slave address)
+ * @return int32_t The value as a 32‑bit signed integer (or 0 if ID not found).
+ */
 int32_t MODBUS_RS485::GET_DATA(uint8_t ID) {
     for (uint8_t I = 0; I < CH_COUNT; I++) {
         if (CH_LIST[I].CH_ID == ID) return CH_DATA[I];
@@ -55,6 +103,15 @@ int32_t MODBUS_RS485::GET_DATA(uint8_t ID) {
     return 0;
 }
 
+/**
+ * @brief Read a single channel (slave/register) synchronously.
+ * @param ID Channel identifier (must have been added via ADD_CH).
+ * @return true if read succeeded, false after retries/timeout.
+ * 
+ * Internally builds the Modbus request frame (function code, address, quantity),
+ * calculates CRC, transmits, waits for response, validates CRC, and stores the
+ * result in CH_DATA[]. Uses the configured byte order and signedness.
+ */
 bool MODBUS_RS485::FETCH(uint8_t ID) {
     if (!CFG.ENABLE) return false;
 
@@ -144,6 +201,24 @@ void MODBUS_RS485::FETCH_ALL() {
     }
 }
 
+/* ========================= Helper Functions ========================= */
+
+/**
+ * @brief Convert raw Modbus register bytes to a 32‑bit signed integer.
+ * @param PAYLOAD Pointer to the data bytes (starting after byte count).
+ * @param LEN Number of bytes (2 for 16‑bit, 4 for 32‑bit).
+ * @param ORDER Byte order (endianness) configuration.
+ * @param SIGN True if the value should be interpreted as signed.
+ * @return int32_t Converted value.
+ * 
+ * Supported orders:
+ * - AB: high byte first (big‑endian, 16‑bit)
+ * - BA: low byte first (little‑endian, 16‑bit)
+ * - ABCD: big‑endian 32‑bit (most significant byte first)
+ * - CDBA: swap words then bytes (useful for some Modbus devices)
+ * - BADC: swap bytes within each word (word swap)
+ * - DCBA: fully reversed (little‑endian 32‑bit)
+ */
 int32_t MODBUS_RS485::APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_ORDER ORDER, bool SIGN) {
     uint32_t raw = 0;
 
@@ -176,6 +251,12 @@ int32_t MODBUS_RS485::APPLY_BYTE_ORDER(uint8_t* PAYLOAD, uint8_t LEN, MB_BYTE_OR
     return 0;
 }
 
+/**
+ * @brief Compute Modbus RTU CRC‑16 (CRC‑16‑IBM, polynomial 0xA001).
+ * @param BUF Pointer to data bytes.
+ * @param LEN Number of bytes.
+ * @return uint16_t Calculated CRC value (low byte first in the frame).
+ */
 uint16_t MODBUS_RS485::CALC_CRC16(uint8_t* BUF, uint8_t LEN) {
     uint16_t crc_val = 0xFFFF;
     for (uint8_t POS = 0; POS < LEN; POS++) {
@@ -191,7 +272,13 @@ uint16_t MODBUS_RS485::CALC_CRC16(uint8_t* BUF, uint8_t LEN) {
     }
     return crc_val;
 }
-
+/**
+ * @brief Enable transmitter mode (DE=HIGH, RE=HIGH).
+ * 
+ * For MAX485, connecting DE and RE together works:
+ * - HIGH = transmit
+ * - LOW  = receive
+ */
 void MODBUS_RS485::TX_EN() {
     digitalWrite(_DE_PIN, HIGH);
     digitalWrite(_RE_PIN, HIGH);
@@ -201,15 +288,30 @@ void MODBUS_RS485::RX_EN() {
     digitalWrite(_RE_PIN, LOW);
 }
 
+/* ========================= Getters ========================= */
+
+/**
+ * @brief Return the number of configured channels.
+ */
 uint8_t MODBUS_RS485::GET_CH_COUNT() {
     return CH_COUNT;
 }
 
+/**
+ * @brief Get a pointer to the channel configuration by index.
+ * @param index 0‑based index (0 … CH_COUNT-1)
+ * @return MODBUS_CH* Pointer to the channel, or nullptr if out of range.
+ */
 MODBUS_CH* MODBUS_RS485::GET_CH(uint8_t index) {
     if (index >= CH_COUNT) return nullptr;
     return &CH_LIST[index];
 }
 
+/**
+ * @brief Get the last read value for a channel by index.
+ * @param index 0‑based index.
+ * @return int32_t Stored value.
+ */
 int32_t MODBUS_RS485::GET_DATA_BY_INDEX(uint8_t index) {
     if (index >= CH_COUNT) return 0;
     return CH_DATA[index];

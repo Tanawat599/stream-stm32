@@ -14,7 +14,7 @@ bool ConfigManager::begin() {
         save();
         return false;
     }
-    if (config.lora.lorawan.uplink_interval_sec > 86400) {  
+    if (config.lora.lorawan.uplink_interval_sec > 86400) {
         Serial1.println(F("[CONFIG] Invalid interval, factory reset again"));
         factoryReset();
         save();
@@ -108,10 +108,6 @@ void ConfigManager::factoryReset() {
 
     // --- LoRaWAN ---
     config.lora.enabled = true;
-    strcpy(config.lora.pins_ss, "PB11");
-    strcpy(config.lora.pins_rst, "PB12");
-    strcpy(config.lora.pins_dio0, "PB0");
-    strcpy(config.lora.region, "AS923");
 
     strcpy(config.lora.lorawan.mode, "ABP");
     strcpy(config.lora.lorawan.class_type, "C");
@@ -122,8 +118,6 @@ void ConfigManager::factoryReset() {
     config.lora.lorawan.tx_adr = true;
     config.lora.lorawan.duty_cycle = true;
     config.lora.lorawan.fport = 2;
-    config.lora.lorawan.rx1_delay_ms = 500;
-    strcpy(config.lora.lorawan.rx1_data_rate, "DR5");
     config.lora.lorawan.rx2_frequency = 923200000;
     strcpy(config.lora.lorawan.rx2_data_rate, "DR2");
     config.lora.lorawan.confirmed_uplink = false;

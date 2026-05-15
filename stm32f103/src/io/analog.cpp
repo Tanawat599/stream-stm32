@@ -12,15 +12,12 @@ void Analog420::begin() {
 void Analog420::loadConfigFromStruct(const HardwareCfg& hw) {
     const auto& analog = hw.analog;
 
-    // คัดลอกเฉพาะฟิลด์ที่มีใน HardwareCfg
     _cfg.enable            = analog.enable;
     _cfg.scale_min         = analog.scale_min;
     _cfg.scale_max         = analog.scale_max;
     _cfg.factor_slope      = analog.factor_slope;
     _cfg.factor_intercept  = analog.factor_intercept;
 
-    // adc/vref/shunt resistor มาจาก default หรืออาจเพิ่มใน HardwareCfg ภายหลัง
-    // _cfg.adc_resolution = 4095.0; (ไม่ต้องเปลี่ยน)
 
     Serial1.println(F("[Analog] Loaded from EEPROM Struct"));
 }
@@ -29,7 +26,6 @@ void Analog420::loadConfigFromStruct(const HardwareCfg& hw) {
 void Analog420::loadConfigFromJson(const JsonObject& json) {
     _cfg.enable = json["enable"] | true;
 
-    // ใช้ is<T>() แทน containsKey เพื่อหลีกเลี่ยง deprecated warning
     if (json["scale"].is<JsonObject>()) {
         JsonObject scale = json["scale"];
         _cfg.scale_min = scale["min"] | 4.0f;

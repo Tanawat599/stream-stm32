@@ -145,7 +145,16 @@ void LoRaWan::begin() {
     
     if (state == RADIOLIB_LORAWAN_NEW_SESSION || state == RADIOLIB_ERR_NONE) {
         Serial1.println(F("Activation Success! Applying Config..."));
+        if (_txPower >= 2 && _txPower <= 20) {
+            int16_t res = node.setTxPower(_txPower);
+            if (res == RADIOLIB_ERR_NONE){
+                Serial1.print(F("TX Power set to ")); Serial1.println(_txPower);
+            }else{
+                Serial1.println(F("Failed to set TX Power"));
+            }
+        }
 
+        
         node.setADR(currentADR); 
 
         uint8_t dr = 12 - currentSF; 
@@ -267,6 +276,7 @@ void LoRaWan::loadConfigFromStruct(const LoRaCfg& cfg) {
     if (strcmp(modeBuf, "ABP") == 0) currentActivation = MODE_ABP;
     else currentActivation = MODE_OTAA;
 
+
     // ================= FPORT =================
     currentFPort = (uint8_t)cfg.lorawan.fport;
     Serial1.print(F("FPort               : "));
@@ -290,7 +300,17 @@ void LoRaWan::loadConfigFromStruct(const LoRaCfg& cfg) {
     node.setADR(currentADR);
 
     node.setDatarate(12 - currentSF);
+    // ================= TX POWER =================
+    _txPower = cfg.lorawan.tx_power;
+    Serial1.print(F("TX Power            : "));
+    Serial1.print(_txPower);
+    Serial1.println(F(" dBm"));
 
+    // ================= RX2 FREQUENCY =================
+    _rx2Freq = cfg.lorawan.rx2_frequency;
+    Serial1.print(F("RX2 Frequency       : "));
+    Serial1.print(_rx2Freq);
+    Serial1.println(F(" Hz"));
     // ================= UPLINK INTERVAL =================
     uplinkIntervalMs = (uint64_t)cfg.lorawan.uplink_interval_sec * 1000ULL;
     Serial1.print(F("Uplink Interval     : "));
